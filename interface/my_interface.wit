@@ -1,0 +1,7 @@
+package my_interface
+
+// Example function that takes an integer and returns an integer
+interface MyInterface {
+    add_one(value: u32) -> u32
+    greet(name: string) -> string
+}
