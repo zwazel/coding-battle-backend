@@ -1,3 +1,0 @@
-[export]
-# The .wit file(s) you'd like to export from
-wit = ["../interface/my_interface.wit"]
