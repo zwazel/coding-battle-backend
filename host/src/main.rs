@@ -1,63 +1,89 @@
-//! Small example of how to instantiate a wasm module that imports one function,
-//! showing how you can fill in host functionality for a wasm module.
+//! Example of instantiating a wasm module which uses WASI imports.
 
-// You can execute this example with `cargo run --example hello`
+/*
+You can execute this example with:
+    cmake examples/
+    cargo run --example wasip2
+*/
 
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::*;
+use wasmtime_wasi::bindings::sync::Command;
+use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 
-struct MyState {
-    name: String,
-    count: usize,
+pub struct ComponentRunStates {
+    // These two are required basically as a standard way to enable the impl of IoView and
+    // WasiView.
+    // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
+    pub wasi_ctx: WasiCtx,
+    pub resource_table: ResourceTable,
+    // You can add other custom host states if needed
+}
+
+impl IoView for ComponentRunStates {
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.resource_table
+    }
+}
+impl WasiView for ComponentRunStates {
+    fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.wasi_ctx
+    }
 }
 
 fn main() -> Result<()> {
-    // First the wasm module needs to be compiled. This is done with a global
-    // "compilation environment" within an `Engine`. Note that engines can be
-    // further configured through `Config` if desired instead of using the
-    // default like this is here.
-    println!("Compiling module...");
+    // Define the WASI functions globally on the `Config`.
     let engine = Engine::default();
-    let module = Module::from_file(&engine, "wasm/hello.wat")?;
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
 
-    // After a module is compiled we create a `Store` which will contain
-    // instantiated modules and other items like host functions. A Store
-    // contains an arbitrary piece of host information, and we use `MyState`
-    // here.
-    println!("Initializing...");
-    let mut store = Store::new(
-        &engine,
-        MyState {
-            name: "hello, world!".to_string(),
-            count: 0,
-        },
-    );
+    // Create a WASI context and put it in a Store; all instances in the store
+    // share this context. `WasiCtxBuilder` provides a number of ways to
+    // configure what the target program will have access to.
+    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
+    let state = ComponentRunStates {
+        wasi_ctx: wasi,
+        resource_table: ResourceTable::new(),
+    };
+    let mut store = Store::new(&engine, state);
 
-    // Our wasm module we'll be instantiating requires one imported function.
-    // the function takes no parameters and returns no results. We create a host
-    // implementation of that function here, and the `caller` parameter here is
-    // used to get access to our original `MyState` value.
-    println!("Creating callback...");
-    let hello_func = Func::wrap(&mut store, |mut caller: Caller<'_, MyState>| {
-        println!("Calling back...");
-        println!("> {}", caller.data().name);
-        caller.data_mut().count += 1;
-    });
+    // Instantiate our component with the imports we've created, and run it.
+    let component = Component::from_file(&engine, "wasm/wasi.wasm")?;
+    let command = Command::instantiate(&mut store, &component, &linker)?;
+    let program_result = command.wasi_cli_run().call_run(&mut store)?;
+    if program_result.is_err() {
+        std::process::exit(1)
+    }
 
-    // Once we've got that all set up we can then move to the instantiation
-    // phase, pairing together a compiled module as well as a set of imports.
-    // Note that this is where the wasm `start` function, if any, would run.
-    println!("Instantiating module...");
-    let imports = [hello_func.into()];
-    let instance = Instance::new(&mut store, &module, &imports)?;
-
-    // Next we poke around a bit to extract the `run` function from the module.
-    println!("Extracting export...");
-    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
-
-    // And last but not least we can call it!
-    println!("Calling export...");
-    run.call(&mut store, ())?;
-
-    println!("Done.");
-    Ok(())
+    // Alternatively, instead of using `Command`, just instantiate it as a normal component
+    // New states
+    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
+    let state = ComponentRunStates {
+        wasi_ctx: wasi,
+        resource_table: ResourceTable::new(),
+    };
+    let mut store = Store::new(&engine, state);
+    // Instantiate it as a normal component
+    let instance = linker.instantiate(&mut store, &component)?;
+    // Get the index for the exported interface
+    let interface_idx = instance
+        .get_export(&mut store, None, "wasi:cli/run@0.2.0")
+        .expect("Cannot get `wasi:cli/run@0.2.0` interface");
+    // Get the index for the exported function in the exported interface
+    let parent_export_idx = Some(&interface_idx);
+    let func_idx = instance
+        .get_export(&mut store, parent_export_idx, "run")
+        .expect("Cannot get `run` function in `wasi:cli/run@0.2.0` interface");
+    let func = instance
+        .get_func(&mut store, func_idx)
+        .expect("Unreachable since we've got func_idx");
+    // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
+    // Reference:
+    // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
+    // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
+    let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
+    let (result,) = typed.call(&mut store, ())?;
+    // Required, see documentation of TypedFunc::call
+    typed.post_return(&mut store)?;
+    result.map_err(|_| anyhow::anyhow!("error"))
 }

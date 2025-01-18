@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 wasmtime = "28"
+wasmtime-wasi = "28"
 wit-bindgen = "0.37.0"
 
 
