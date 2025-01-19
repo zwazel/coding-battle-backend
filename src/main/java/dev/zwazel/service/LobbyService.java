@@ -19,17 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @RequiredArgsConstructor
 public class LobbyService {
-    // We’ll store both the Lobby object and the SSE sink in one container
-    static class LobbyData {
-        Lobby lobby;
-        Sinks.Many<LobbyEvent> sink;
-
-        LobbyData(Lobby lobby, Sinks.Many<LobbyEvent> sink) {
-            this.lobby = lobby;
-            this.sink = sink;
-        }
-    }
-
     // A simple in-memory map of lobbyId -> Lobby
     private final Map<String, LobbyData> lobbies = new ConcurrentHashMap<>();
 
@@ -45,7 +34,7 @@ public class LobbyService {
 
         // Emit an initial WAITING event
         sink.tryEmitNext(new LobbyEvent(LobbyEventType.WAITING,
-            "Lobby created, waiting for simulation to start"));
+                "Lobby created, waiting for simulation to start"));
 
         lobbies.put(lobbyId, new LobbyData(lobby, sink));
 
@@ -68,8 +57,20 @@ public class LobbyService {
     public List<Lobby> getAllLobbies() {
         List<Lobby> result = new ArrayList<>();
         for (LobbyData ld : lobbies.values()) {
+            // TODO: Only return ID of the lobby, no additional data
             result.add(ld.lobby);
         }
         return result;
+    }
+
+    // We’ll store both the Lobby object and the SSE sink in one container
+    static class LobbyData {
+        Lobby lobby;
+        Sinks.Many<LobbyEvent> sink;
+
+        LobbyData(Lobby lobby, Sinks.Many<LobbyEvent> sink) {
+            this.lobby = lobby;
+            this.sink = sink;
+        }
     }
 }
