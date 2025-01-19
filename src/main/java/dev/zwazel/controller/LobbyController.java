@@ -1,58 +1,62 @@
 package dev.zwazel.controller;
 
-import dev.zwazel.model.GameState;
+import dev.zwazel.model.Lobby;
+import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.model.Player;
 import dev.zwazel.service.LobbyService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
-import java.util.Objects;
 
 @RestController
 @RequestMapping("/lobbies")
 @Slf4j
+@RequiredArgsConstructor
 public class LobbyController {
 
     private final LobbyService lobbyService;
 
-    public LobbyController(LobbyService lobbyService) {
-        this.lobbyService = lobbyService;
-    }
-
     /**
-     * Create a new lobby. Accept a list of players in the request.
-     * Return the new lobby ID.
+     * Create a new lobby, providing a list of players in the request body.
      */
     @PostMapping
-    public String createLobby(@RequestBody List<Player> players) {
+    public Lobby createLobby(@RequestBody List<Player> players) {
         return lobbyService.createLobby(players);
     }
 
     /**
-     * Stream the simulation events (the full GameState each "turn").
+     * Get info about a specific lobby (players, etc.).
      */
-    @GetMapping(value = "/{lobbyId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<GameState> streamLobby(@PathVariable String lobbyId) {
-        // Optionally, you could fetch the current state and send it once
-        // before returning the flux. But SSE generally is continuous streaming.
-        Flux<GameState> flux = lobbyService.getLobbyFlux(lobbyId);
-        // In a real app, you'd throw a 404 or similar
-        return Objects.requireNonNullElseGet(flux, () -> Flux.error(new IllegalArgumentException("No such lobby")));
+    @GetMapping("/{lobbyId}")
+    public Lobby getLobby(@PathVariable String lobbyId) {
+        Lobby lobby = lobbyService.getLobby(lobbyId);
+        if (lobby == null) {
+            throw new IllegalArgumentException("Lobby not found: " + lobbyId);
+        }
+        return lobby;
     }
 
     /**
-     * (Optional) Show the current full state if you want an immediate snapshot
-     * without streaming.
+     * (Optional) List all lobbies
      */
-    @GetMapping("/{lobbyId}/state")
-    public GameState getCurrentState(@PathVariable String lobbyId) {
-        GameState state = lobbyService.getLobbyCurrentState(lobbyId);
-        if (state == null) {
-            throw new IllegalArgumentException("No such lobby");
+    @GetMapping
+    public List<Lobby> getAllLobbies() {
+        return lobbyService.getAllLobbies();
+    }
+
+    /**
+     * SSE endpoint that merges both "lobby" + "simulation" events.
+     */
+    @GetMapping(value = "/{lobbyId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<LobbyEvent> subscribeToLobbyEvents(@PathVariable String lobbyId) {
+        var sink = lobbyService.getSink(lobbyId);
+        if (sink == null) {
+            return Flux.error(new IllegalArgumentException("Lobby not found: " + lobbyId));
         }
-        return state;
+        return sink.asFlux();
     }
 }

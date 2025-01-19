@@ -1,12 +1,10 @@
 package dev.zwazel.model;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Data
-@NoArgsConstructor
 public class GameState {
     private String lobbyId;
     private int turn;

@@ -1,94 +1,75 @@
 package dev.zwazel.service;
 
-import dev.zwazel.model.GameState;
+import dev.zwazel.model.Lobby;
+import dev.zwazel.model.LobbyEvent;
+import dev.zwazel.model.LobbyEventType;
 import dev.zwazel.model.Player;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.ConnectableFlux;
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
-import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class LobbyService {
+    // We’ll store both the Lobby object and the SSE sink in one container
+    static class LobbyData {
+        Lobby lobby;
+        Sinks.Many<LobbyEvent> sink;
 
-    // Holds the "hot flux" + the current game state for each lobby
-    static class LobbyInfo {
-        GameState gameState;
-        ConnectableFlux<GameState> flux;
-
-        LobbyInfo(GameState gameState, ConnectableFlux<GameState> flux) {
-            this.gameState = gameState;
-            this.flux = flux;
+        LobbyData(Lobby lobby, Sinks.Many<LobbyEvent> sink) {
+            this.lobby = lobby;
+            this.sink = sink;
         }
     }
 
-    private final Map<String, LobbyInfo> lobbies = new ConcurrentHashMap<>();
+    // A simple in-memory map of lobbyId -> Lobby
+    private final Map<String, LobbyData> lobbies = new ConcurrentHashMap<>();
 
     /**
-     * Create a new lobby with a generated ID and a list of players.
-     * This method also starts the simulation "hot flux" so it continues running
-     * regardless of subscriber count.
+     * Create a new lobby with a generated ID.
      */
-    public String createLobby(List<Player> players) {
+    public Lobby createLobby(List<Player> players) {
         String lobbyId = UUID.randomUUID().toString();
-        GameState initialState = new GameState(lobbyId, players);
+        Lobby lobby = new Lobby(lobbyId, players);
 
-        // Create a "hot" flux that updates the GameState every second until finished
-        // replay(1) ensures new subscribers see the *latest* GameState immediately
-        ConnectableFlux<GameState> connectableFlux = Flux.interval(Duration.ofSeconds(1))
-                .map(tick -> {
-                    updateGameState(initialState);
-                    return initialState;
-                })
-                // Optionally stop if "finished" is true
-                .takeUntil(GameState::isFinished)
-                .replay(1);
+        // Create a sink that replays the last event for new subscribers
+        Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
 
-        // Start emitting immediately
-        connectableFlux.connect();
+        // Emit an initial WAITING event
+        sink.tryEmitNext(new LobbyEvent(LobbyEventType.WAITING,
+            "Lobby created, waiting for simulation to start"));
 
-        // Put in map
-        lobbies.put(lobbyId, new LobbyInfo(initialState, connectableFlux));
-        return lobbyId;
+        lobbies.put(lobbyId, new LobbyData(lobby, sink));
+
+        return lobby;
     }
 
     /**
-     * Return the flux for a given lobby. If it doesn't exist, return null or throw an exception.
+     * Get an existing lobby by ID (or null if not found).
      */
-    public Flux<GameState> getLobbyFlux(String lobbyId) {
-        LobbyInfo info = lobbies.get(lobbyId);
-        if (info == null) return null;
-
-        // Return the flux (new subscribers get the current/last state + subsequent)
-        return info.flux;
+    public Lobby getLobby(String lobbyId) {
+        LobbyData data = lobbies.get(lobbyId);
+        return (data != null) ? data.lobby : null;
     }
 
-    /**
-     * Return the *current* full state for a given lobby (for example,
-     * if you want to show the entire state on connect before streaming).
-     */
-    public GameState getLobbyCurrentState(String lobbyId) {
-        LobbyInfo info = lobbies.get(lobbyId);
-        if (info == null) return null;
-        return info.gameState;
+    public Sinks.Many<LobbyEvent> getSink(String lobbyId) {
+        LobbyData data = lobbies.get(lobbyId);
+        return (data != null) ? data.sink : null;
     }
 
-    /**
-     * Simple example logic that increments the turn count each tick
-     * and marks the game finished if turn reaches 5, for instance.
-     */
-    private void updateGameState(GameState state) {
-        if (state.isFinished()) {
-            // No-op if already finished
-            return;
+    public List<Lobby> getAllLobbies() {
+        List<Lobby> result = new ArrayList<>();
+        for (LobbyData ld : lobbies.values()) {
+            result.add(ld.lobby);
         }
-        state.setTurn(state.getTurn() + 1);
-
-        // Example condition to stop
-        if (state.getTurn() >= 5) {
-            state.setFinished(true);
-        }
+        return result;
     }
 }
