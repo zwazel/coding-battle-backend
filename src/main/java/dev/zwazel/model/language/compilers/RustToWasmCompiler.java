@@ -1,12 +1,82 @@
 package dev.zwazel.model.language.compilers;
 
-public class RustToWasmCompiler {
-    public static byte[] compile(String code) {
-        // Placeholder for actual Rust to WASM compilation logic
-        // In a real implementation, this would invoke the Rust compiler (e.g., `wasm-pack` or `cargo`)
-        // and return the compiled WASM binary as a byte array.
+import dev.zwazel.DTO.CompileResponse;
+import dev.zwazel.model.language.LanguageToWASMCompilerInterface;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.multipart.MultipartFile;
 
-        // For now, we return an empty byte array to indicate no compilation has occurred.
-        return new byte[0];
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import static dev.zwazel.service.UserCodeService.ARTIFACTS;
+
+public class RustToWasmCompiler implements LanguageToWASMCompilerInterface {
+    @Override
+    public CompileResponse compile(MultipartFile file) throws IOException, InterruptedException {
+        String botName = "bob";
+
+        // 1. Temp workspace
+        Path workDir = Files.createTempDirectory("bot-" + botName + "-");
+        Path srcDir = workDir.resolve("src");
+        Files.createDirectories(srcDir);
+
+        // 2. Write Cargo template --------------------------------------
+        Files.writeString(workDir.resolve("Cargo.toml"), cargoToml(botName));
+        Path libPath = srcDir.resolve("lib.rs");
+        try (InputStream in = file.getInputStream()) {
+            Files.copy(in, libPath, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        // 3. Docker build ---------------------------------------------
+        ProcessBuilder pb = new ProcessBuilder(
+                "docker", "run", "--rm",
+                "-v", workDir.toAbsolutePath() + ":/code",
+                "-w", "/code",
+                "rustlang/rust:nightly-alpine",
+                "sh", "-c",
+                "rustup target add wasm32-unknown-unknown && " +
+                        "cargo build --release --target wasm32-unknown-unknown --offline"
+        );
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        String buildLog = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        boolean ok = p.waitFor(120, TimeUnit.SECONDS) && p.exitValue() == 0;
+
+        // 4. Move artifact if success ---------------------------------
+        if (ok) {
+            Path wasmSrc = workDir.resolve(
+                    "target/wasm32-unknown-unknown/release/" + botName.replaceAll("[^a-zA-Z0-9]", "_") + ".wasm");
+            String wasmFileName = botName + "-" + UUID.randomUUID() + ".wasm";
+            Path wasmDest = ARTIFACTS.resolve(wasmFileName);
+            Files.createDirectories(ARTIFACTS);
+            Files.move(wasmSrc, wasmDest);
+
+            return new CompileResponse(HttpStatus.OK,
+                    "Success—warp-lightning ready!",
+                    wasmDest.toString(), LanguageToWASMCompilerInterface.truncate(buildLog));
+        }
+        return new CompileResponse(HttpStatus.BAD_REQUEST,
+                "Compilation failed, man-thing!",
+                null, LanguageToWASMCompilerInterface.truncate(buildLog));
+    }
+
+    private String cargoToml(String botName) {
+        return """
+                [package]
+                name = "%s"
+                version = "0.1.0"
+                edition = "2024"
+                
+                [lib]
+                crate-type = ["cdylib"]
+                
+                [dependencies]
+                """.formatted(botName.replaceAll("[^a-zA-Z0-9]", "_"));
     }
 }
