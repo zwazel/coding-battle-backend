@@ -63,6 +63,10 @@ public class LobbyService {
         return result;
     }
 
+    public void removeLobby(String lobbyId) {
+        lobbies.remove(lobbyId);
+    }
+
     // We’ll store both the Lobby object and the SSE sink in one container
     static class LobbyData {
         Lobby lobby;

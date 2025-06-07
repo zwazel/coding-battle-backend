@@ -9,11 +9,9 @@ public class GameState {
     private String lobbyId;
     private int turn;
     private boolean finished;
-    private List<Player> players;
 
-    public GameState(String lobbyId, List<Player> players) {
+    public GameState(String lobbyId) {
         this.lobbyId = lobbyId;
-        this.players = players;
         this.turn = 0;
         this.finished = false;
     }

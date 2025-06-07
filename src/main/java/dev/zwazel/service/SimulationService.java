@@ -40,6 +40,11 @@ public class SimulationService {
             throw new IllegalArgumentException("No such lobby");
         }
 
+        if (lobby.getGameState() != null && lobby.getGameState().isFinished()) {
+            // Simulation already finished
+            throw new IllegalStateException("Simulation already finished for lobby: " + lobbyId);
+        }
+
         var sink = lobbyService.getSink(lobbyId);
         if (sink == null) {
             throw new IllegalArgumentException("No sink found for lobby");
@@ -50,7 +55,8 @@ public class SimulationService {
                 "Simulation has started"));
 
         // Create a GameState
-        GameState state = new GameState(lobbyId, lobby.getPlayers());
+        GameState state = new GameState(lobbyId);
+        lobby.setGameState(state);
 
         // Start a "turn loop" that ticks every 1 second
         Disposable disposable = Flux.interval(Duration.ofSeconds(1))
@@ -83,6 +89,7 @@ public class SimulationService {
             if (d != null) {
                 d.dispose();
                 runningSimulations.remove(state.getLobbyId());
+                lobbyService.removeLobby(state.getLobbyId());
             }
         }
     }

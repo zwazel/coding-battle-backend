@@ -1,15 +1,19 @@
 package dev.zwazel.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
 @Data
 @AllArgsConstructor
-@NoArgsConstructor
+@RequiredArgsConstructor
 public class Lobby {
-    private String id;
-    private List<Player> players;
+    private final String id;
+    private final List<Player> players;
+
+    @JsonIgnore
+    private GameState gameState;
 }
