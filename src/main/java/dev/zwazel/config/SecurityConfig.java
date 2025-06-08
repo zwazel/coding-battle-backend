@@ -24,7 +24,32 @@ class SecurityConfig {
                 /* Frame header disabled only for H2 console */
                 .headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
 
+                /* Path-based rules */
+                .authorizeHttpRequests(auth -> auth
+                        /* open to everyone */
+                        .requestMatchers(
+                                AntPathRequestMatcher.antMatcher("api/**/public/**")
+                        )
+                        .permitAll()
 
+                        /* ADMIN role */
+                        .requestMatchers(
+                                AntPathRequestMatcher.antMatcher("api/**/admin/**")
+                        ).hasRole("ADMIN")
+
+                        /* USER role */
+                        .requestMatchers(
+                                AntPathRequestMatcher.antMatcher("api/**/user/**")
+                        ).hasRole("USER")
+
+                        /* Lobbies */
+                        .requestMatchers(
+                                AntPathRequestMatcher.antMatcher("api/lobbies/**")
+                        ).permitAll()
+
+                        /* any other endpoint requires login */
+                        .anyRequest().authenticated()
+                )
 
                 /* Use HTTP Basic for quick tests, or formLogin(), or JWT. */
                 .httpBasic(Customizer.withDefaults());
