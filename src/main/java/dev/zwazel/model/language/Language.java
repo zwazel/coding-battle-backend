@@ -1,6 +1,6 @@
 package dev.zwazel.model.language;
 
-import dev.zwazel.DTO.CompileResponse;
+import dev.zwazel.DTO.CompileResultDTO;
 import dev.zwazel.model.language.compilers.RustToWasmCompiler;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,7 +15,7 @@ public enum Language {
         this.compiler = compiler;
     }
 
-    public CompileResponse compile(MultipartFile sourceFile) throws IOException, InterruptedException {
+    public CompileResultDTO compile(MultipartFile sourceFile) throws IOException, InterruptedException {
         return compiler.compile(sourceFile);
     }
 }

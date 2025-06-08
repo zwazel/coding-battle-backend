@@ -4,6 +4,7 @@ import dev.zwazel.domain.Role;
 import dev.zwazel.domain.User;
 import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
+import jakarta.annotation.Priority;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
@@ -18,6 +19,7 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 @DependsOnDatabaseInitialization
+@Priority(1)
 class GeneralSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;

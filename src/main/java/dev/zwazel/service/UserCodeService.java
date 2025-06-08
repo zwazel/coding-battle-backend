@@ -1,6 +1,6 @@
 package dev.zwazel.service;
 
-import dev.zwazel.DTO.CompileResponse;
+import dev.zwazel.DTO.CompileResultDTO;
 import dev.zwazel.model.language.Language;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,7 +14,7 @@ import java.nio.file.Path;
 public class UserCodeService {
     public static final Path ARTIFACTS = Path.of("artifacts");
 
-    public CompileResponse compile(Language language, MultipartFile file) throws IOException, InterruptedException {
+    public CompileResultDTO compile(Language language, MultipartFile file) throws IOException, InterruptedException {
         return language.compile(file);
     }
 }

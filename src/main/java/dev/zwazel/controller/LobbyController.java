@@ -1,12 +1,17 @@
 package dev.zwazel.controller;
 
+import dev.zwazel.DTO.AllLobbiesDTO;
+import dev.zwazel.DTO.CreateLobbyRequestDTO;
+import dev.zwazel.DTO.PublicUserDTO;
+import dev.zwazel.domain.User;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
-import dev.zwazel.model.Player;
+import dev.zwazel.repository.UserRepository;
 import dev.zwazel.service.LobbyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -20,12 +25,34 @@ public class LobbyController {
 
     private final LobbyService lobbyService;
 
+    private final UserRepository userRepository;
+
     /**
      * Create a new lobby, providing a list of players in the request body.
      */
     @PostMapping
-    public Lobby createLobby(@RequestBody List<Player> players) {
-        return lobbyService.createLobby(players);
+    @PreAuthorize("hasRole('USER')")
+    public Lobby createLobby(@RequestBody CreateLobbyRequestDTO request) {
+        List<User> userList = request.players().stream()
+                .map(this::findUser)
+                .toList();
+
+        return lobbyService.createLobby(request.lobbyname(), userList);
+    }
+
+    private User findUser(PublicUserDTO player) {
+        User user = null;
+        if (player.id() != null) {
+            user = userRepository.findById(player.id()).orElse(null);
+        }
+        if (user == null && player.username() != null) {
+            user = userRepository.findByUsername(player.username());
+        }
+
+        if (user == null) {
+            throw new IllegalArgumentException("User not found with id: " + player.id() + " or username: " + player.username());
+        }
+        return user;
     }
 
     /**
@@ -44,8 +71,8 @@ public class LobbyController {
      * (Optional) List all lobbies
      */
     @GetMapping
-    public List<Lobby> getAllLobbies() {
-        return lobbyService.getAllLobbies();
+    public List<AllLobbiesDTO> getAllLobbies() {
+        return AllLobbiesDTO.from(lobbyService.getAllLobbies());
     }
 
     /**

@@ -1,6 +1,6 @@
 package dev.zwazel.model.language.compilers;
 
-import dev.zwazel.DTO.CompileResponse;
+import dev.zwazel.DTO.CompileResultDTO;
 import dev.zwazel.model.language.LanguageToWASMCompilerInterface;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +18,7 @@ import static dev.zwazel.service.UserCodeService.ARTIFACTS;
 
 public class RustToWasmCompiler implements LanguageToWASMCompilerInterface {
     @Override
-    public CompileResponse compile(MultipartFile file) throws IOException, InterruptedException {
+    public CompileResultDTO compile(MultipartFile file) throws IOException, InterruptedException {
         String botName = "bob";
 
         // 1. Temp workspace
@@ -57,11 +57,11 @@ public class RustToWasmCompiler implements LanguageToWASMCompilerInterface {
             Files.createDirectories(ARTIFACTS);
             Files.move(wasmSrc, wasmDest);
 
-            return new CompileResponse(HttpStatus.OK,
+            return new CompileResultDTO(HttpStatus.OK,
                     "Success—warp-lightning ready!",
                     wasmDest.toString(), LanguageToWASMCompilerInterface.truncate(buildLog));
         }
-        return new CompileResponse(HttpStatus.BAD_REQUEST,
+        return new CompileResultDTO(HttpStatus.BAD_REQUEST,
                 "Compilation failed, man-thing!",
                 null, LanguageToWASMCompilerInterface.truncate(buildLog));
     }

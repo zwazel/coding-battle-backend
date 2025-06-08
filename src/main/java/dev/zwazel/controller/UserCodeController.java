@@ -1,6 +1,6 @@
 package dev.zwazel.controller;
 
-import dev.zwazel.DTO.CompileResponse;
+import dev.zwazel.DTO.CompileResultDTO;
 import dev.zwazel.model.language.Language;
 import dev.zwazel.service.UserCodeService;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +17,8 @@ public class UserCodeController {
     private final UserCodeService userCodeService;
 
     @PostMapping
-    public ResponseEntity<CompileResponse> uploadCodeAndCompileToWasm(@RequestParam Language language, @RequestPart MultipartFile sourceFile) throws IOException, InterruptedException {
-        CompileResponse response = userCodeService.compile(language, sourceFile);
+    public ResponseEntity<CompileResultDTO> uploadCodeAndCompileToWasm(@RequestParam Language language, @RequestPart MultipartFile sourceFile) throws IOException, InterruptedException {
+        CompileResultDTO response = userCodeService.compile(language, sourceFile);
         return ResponseEntity.status(response.status()).body(response);
     }
 }
