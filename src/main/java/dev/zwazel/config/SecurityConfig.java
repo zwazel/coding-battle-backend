@@ -28,23 +28,23 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         /* open to everyone */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("api/**/public/**")
+                                AntPathRequestMatcher.antMatcher("/api/**/public/**")
                         )
                         .permitAll()
 
                         /* ADMIN role */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("api/**/admin/**")
+                                AntPathRequestMatcher.antMatcher("/api/**/admin/**")
                         ).hasRole("ADMIN")
 
                         /* USER role */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("api/**/user/**")
+                                AntPathRequestMatcher.antMatcher("/api/**/user/**")
                         ).hasRole("USER")
 
                         /* Lobbies */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("api/lobbies/**")
+                                AntPathRequestMatcher.antMatcher("/api/lobbies/**")
                         ).permitAll()
 
                         /* any other endpoint requires login */
