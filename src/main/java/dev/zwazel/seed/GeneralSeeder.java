@@ -25,17 +25,37 @@ class GeneralSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
 
+    @Value("${admin.username}")
+    private String adminUsername;
+
     @Value("${admin.password}")
     private String adminPassword;
+
+    @Value("${roles.admin}")
+    private String adminRoleName;
+
+    @Value("${roles.user}")
+    private String userRolesName;
 
     @Override
     @Transactional
     public void run(String... args) throws IOException {
         Files.createDirectories(Path.of("artifacts"));
 
-        Role admin = roleRepository.save(Role.builder().name("ADMIN").build());
-        Role user = roleRepository.save(Role.builder().name("USER").build());
+        Role adminRole;
+        if (!roleRepository.existsByName(adminRoleName)) {
+            adminRole = roleRepository.save(Role.builder().name(adminRoleName).build());
+        } else {
+            adminRole = roleRepository.findByName(adminRoleName);
+        }
 
-        userRepository.save(User.ofPlainPassword("admin", adminPassword, Set.of(admin, user)));
+        Role userRole;
+        if (!roleRepository.existsByName(userRolesName)) {
+            userRole = roleRepository.save(Role.builder().name(userRolesName).build());
+        } else {
+            userRole = roleRepository.findByName(userRolesName);
+        }
+
+        userRepository.save(User.ofPlainPassword(adminUsername, adminPassword, Set.of(adminRole, userRole)));
     }
 }
