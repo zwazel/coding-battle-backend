@@ -29,7 +29,7 @@ class SecurityConfig {
     private final Environment env;
 
     @Bean
-    SecurityFilterChain filterChainGeneral(HttpSecurity http) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http) throws Exception {
         http
                 /* CSRF default is fine for APIs that use JWT or same-site cookies.
                    For pure JSON REST with token auth you’d disable it. */

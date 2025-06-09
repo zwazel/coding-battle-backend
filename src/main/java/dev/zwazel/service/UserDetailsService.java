@@ -16,14 +16,13 @@ public class UserDetailsService implements org.springframework.security.core.use
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        System.out.println("Loading user by username: " + username);
         User u = userRepository.findByUsername(username);
 
         return new org.springframework.security.core.userdetails.User(
                 u.getUsername(),
                 u.getPassword(),
                 u.getRoles().stream()
-                        .map(role -> new org.springframework.security.core.authority.SimpleGrantedAuthority(role.getName()))
+                        .map(role -> new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role.getName()))
                         .toList()
         );
     }

@@ -26,7 +26,7 @@ class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest req, @NonNull HttpServletResponse res, @NonNull FilterChain chain) throws ServletException, IOException {
-        String token = resolve(req);            // header or cookie
+        String token = resolve(req);
         if (token != null) {
             try {
                 var jws = jwt.parse(token);
