@@ -19,8 +19,7 @@ public class SimulationController {
      * If it's already started, this does nothing.
      */
     @PostMapping("/{lobbyId}/start")
-    public String startSimulation(@PathVariable String lobbyId) {
+    public void startSimulation(@PathVariable String lobbyId) {
         simulationService.startSimulation(lobbyId);
-        return "Simulation started for lobby " + lobbyId;
     }
 }
