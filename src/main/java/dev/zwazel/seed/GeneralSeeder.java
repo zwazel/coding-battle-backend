@@ -6,6 +6,7 @@ import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
 import jakarta.annotation.Priority;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,9 @@ class GeneralSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
 
+    @Value("${admin.password}")
+    private String adminPassword;
+
     @Override
     @Transactional
     public void run(String... args) throws IOException {
@@ -32,6 +36,6 @@ class GeneralSeeder implements CommandLineRunner {
         Role admin = roleRepository.save(Role.builder().name("ADMIN").build());
         Role user = roleRepository.save(Role.builder().name("USER").build());
 
-        userRepository.save(User.ofPlainPassword("admin", System.getProperty("admin.password", "Admin123"), Set.of(admin, user)));
+        userRepository.save(User.ofPlainPassword("admin", adminPassword, Set.of(admin, user)));
     }
 }
