@@ -9,7 +9,12 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users", uniqueConstraints = @UniqueConstraint(columnNames = "username"))
+@Table(
+        name = "users",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = "username_lower")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,11 +32,11 @@ public class User {
     @Column(length = 36, nullable = false, updatable = false)
     private UUID id;
 
-    /**
-     * public login/identifier
-     */
     @Column(nullable = false, length = 40)
-    private String username;
+    private String username;               // as entered
+
+    @Column(name = "username_lower", nullable = false, length = 40)
+    private String usernameLower;          // enforced unique
 
     /**
      * BCrypt-hashed password
@@ -63,10 +68,11 @@ public class User {
                 .build();
     }
 
-    /**
-     * Validate raw password against stored hash
-     */
-    public boolean matches(String rawPassword) {
-        return ENC.matches(rawPassword, this.password);
+    @PrePersist
+    @PreUpdate
+    private void normalizeUsername() {
+        if (this.username != null) {
+            this.usernameLower = this.username.toLowerCase();
+        }
     }
 }

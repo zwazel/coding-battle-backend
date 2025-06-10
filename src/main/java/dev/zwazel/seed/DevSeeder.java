@@ -6,6 +6,7 @@ import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
 import jakarta.annotation.Priority;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Profile;
@@ -23,18 +24,29 @@ class DevSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
 
+    @Value("${roles.user}")
+    private String userRolesName;
+
+    @Value("${dev.user.password}")
+    private String testUserPassword;
+
+    @Value("${dev.user.username}")
+    private String testUserUsername;
+
+    @Value("${dev.user.count}")
+    private int testUserCount;
+
     @Override
     @Transactional
-    public void run(String... args) throws Exception {
-        // Get User Roles and create 2 users with those roles
-        Role userRole = roleRepository.findByName("USER");
+    public void run(String... args) {
+        Role userRole = roleRepository.findByName(userRolesName).orElseThrow(() -> new IllegalStateException("User role not found. Please run the general seeder first."));
 
-        if (userRole == null) {
-            throw new IllegalStateException("User role not found. Please run the general seeder first.");
+        for (int i = 0; i < testUserCount; i++) {
+            String username = testUserUsername + "_" + (i + 1);
+            if (userRepository.findByUsernameLower(username.toLowerCase()).isPresent()) {
+                continue; // Skip if the User already exists
+            }
+            userRepository.save(User.ofPlainPassword(username, testUserPassword, Set.of(userRole)));
         }
-
-        // Create a user with the USER role
-        userRepository.save(User.ofPlainPassword("devUser1", "DevUser123", Set.of(userRole)));
-        userRepository.save(User.ofPlainPassword("devUser2", "DevUser123", Set.of(userRole)));
     }
 }

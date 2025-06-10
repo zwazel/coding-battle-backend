@@ -2,8 +2,6 @@ package dev.zwazel.controller;
 
 import dev.zwazel.DTO.AllLobbiesDTO;
 import dev.zwazel.DTO.CreateLobbyRequestDTO;
-import dev.zwazel.DTO.PublicUserDTO;
-import dev.zwazel.domain.User;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.repository.UserRepository;
@@ -14,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -36,18 +33,6 @@ public class LobbyController {
     @PreAuthorize("hasRole('USER')")
     public Lobby createLobby(@RequestBody CreateLobbyRequestDTO request, @AuthenticationPrincipal CustomUserPrincipal loggedInUser) {
         return lobbyService.createLobby(request, loggedInUser);
-    }
-
-    private User findUser(PublicUserDTO player) {
-        User user = userRepository.findById(player.id()).orElse(null);
-        if (user == null) {
-            user = userRepository.findByUsername(player.username()).orElse(null);
-        }
-
-        if (user == null) {
-            throw new IllegalArgumentException("User not found with id: " + player.id() + " or username: " + player.username());
-        }
-        return user;
     }
 
     /**

@@ -12,7 +12,6 @@ import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitializat
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
@@ -22,8 +21,8 @@ import java.util.Set;
 @DependsOnDatabaseInitialization
 @Priority(1)
 class GeneralSeeder implements CommandLineRunner {
-    private final RoleRepository roleRepository;
-    private final UserRepository userRepository;
+    private final RoleRepository roleRepo;
+    private final UserRepository userRepo;
 
     @Value("${admin.username}")
     private String adminUsername;
@@ -35,27 +34,27 @@ class GeneralSeeder implements CommandLineRunner {
     private String adminRoleName;
 
     @Value("${roles.user}")
-    private String userRolesName;
+    private String userRoleName;
 
     @Override
     @Transactional
-    public void run(String... args) throws IOException {
+    public void run(String... args) throws Exception {
+
+        // make sure artifacts/ exists
         Files.createDirectories(Path.of("artifacts"));
 
-        Role adminRole;
-        if (!roleRepository.existsByName(adminRoleName)) {
-            adminRole = roleRepository.save(Role.builder().name(adminRoleName).build());
-        } else {
-            adminRole = roleRepository.findByName(adminRoleName);
-        }
+        /* ---------- ensure roles exist (create-if-absent) ------------ */
+        Role adminRole = roleRepo.findByName(adminRoleName)
+                .orElseGet(() -> roleRepo.save(Role.builder().name(adminRoleName).build()));
 
-        Role userRole;
-        if (!roleRepository.existsByName(userRolesName)) {
-            userRole = roleRepository.save(Role.builder().name(userRolesName).build());
-        } else {
-            userRole = roleRepository.findByName(userRolesName);
-        }
+        Role userRole = roleRepo.findByName(userRoleName)
+                .orElseGet(() -> roleRepo.save(Role.builder().name(userRoleName).build()));
 
-        userRepository.save(User.ofPlainPassword(adminUsername, adminPassword, Set.of(adminRole, userRole)));
+        /* ---------- create admin user only if missing ---------------- */
+        if (userRepo.findByUsernameLower(adminUsername.toLowerCase()).isEmpty()) {
+            userRepo.save(User.ofPlainPassword(adminUsername,
+                    adminPassword,
+                    Set.of(adminRole, userRole)));
+        }
     }
 }

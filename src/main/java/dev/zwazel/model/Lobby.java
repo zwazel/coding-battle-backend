@@ -15,6 +15,7 @@ import java.util.List;
 public class Lobby {
     private final String name;
     private final List<LobbyUser> players;
+    private final List<LobbyUser> spectators;
     private int maxPlayers;
     private int maxSpectators;
 
