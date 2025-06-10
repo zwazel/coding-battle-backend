@@ -1,9 +1,12 @@
 package dev.zwazel.service;
 
-import dev.zwazel.domain.User;
+import dev.zwazel.DTO.CreateLobbyRequestDTO;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.model.LobbyEventType;
+import dev.zwazel.model.LobbyUser;
+import dev.zwazel.repository.UserRepository;
+import dev.zwazel.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,14 +21,27 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @RequiredArgsConstructor
 public class LobbyService {
+    private final UserRepository userRepository;
+
     // A simple in-memory map of lobbyId -> Lobby
     private final Map<String, LobbyData> lobbies = new ConcurrentHashMap<>();
 
     /**
      * Create a new lobby with a generated ID.
      */
-    public Lobby createLobby(String lobbyname, List<User> players) {
-        Lobby lobby = new Lobby(lobbyname, players);
+    public Lobby createLobby(CreateLobbyRequestDTO request, CustomUserPrincipal loggedInUser) {
+        LobbyUser hostUser = LobbyUser.builder()
+                .userId(loggedInUser.getId())
+                .username(loggedInUser.getUsername())
+                .isHost(true)
+                .build();
+
+        Lobby lobby = Lobby.builder()
+                .name(request.lobbyname())
+                .maxPlayers(request.maxPlayers())
+                .maxSpectators(request.maxSpectators())
+                .players(List.of(hostUser))
+                .build();
 
         // Create a sink that replays the last event for new subscribers
         Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
@@ -36,7 +52,7 @@ public class LobbyService {
 
         // TODO: ensure lobbyname is unique, maybe throw an exception if it already exists
 
-        lobbies.put(lobbyname, new LobbyData(lobby, sink));
+        lobbies.put(request.lobbyname(), new LobbyData(lobby, sink));
 
         return lobby;
     }

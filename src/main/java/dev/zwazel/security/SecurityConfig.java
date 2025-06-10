@@ -31,8 +31,6 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain chain(HttpSecurity http) throws Exception {
         http
-                /* CSRF default is fine for APIs that use JWT or same-site cookies.
-                   For pure JSON REST with token auth you’d disable it. */
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -44,8 +42,12 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         /* open to everyone */
                         .requestMatchers(
+                                /* Public */
                                 AntPathRequestMatcher.antMatcher("/api/**/public/**"),
-                                AntPathRequestMatcher.antMatcher("/api/auth/**")
+                                /* Auth */
+                                AntPathRequestMatcher.antMatcher("/api/auth/**"),
+                                /* Lobbies */
+                                AntPathRequestMatcher.antMatcher("/api/lobbies/**")
                         )
                         .permitAll()
 
@@ -58,11 +60,6 @@ class SecurityConfig {
                         .requestMatchers(
                                 AntPathRequestMatcher.antMatcher("/api/**/user/**")
                         ).hasRole("USER")
-
-                        /* Lobbies */
-                        .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/lobbies/**")
-                        ).permitAll()
                 )
 
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

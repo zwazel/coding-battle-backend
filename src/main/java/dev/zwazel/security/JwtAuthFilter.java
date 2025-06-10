@@ -1,5 +1,6 @@
 package dev.zwazel.security;
 
+import dev.zwazel.service.UserDetailsService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,20 +10,21 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.WebUtils;
 
 import java.io.IOException;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwt;
+    private final UserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest req, @NonNull HttpServletResponse res, @NonNull FilterChain chain) throws ServletException, IOException {
@@ -32,14 +34,15 @@ class JwtAuthFilter extends OncePerRequestFilter {
                 var jws = jwt.parse(token);
                 String username = jws.getPayload().getSubject();
 
-                List<SimpleGrantedAuthority> auths =
-                        ((List<String>) jws.getPayload().get("roles"))
-                                .stream().map(SimpleGrantedAuthority::new).toList();
+                // Load full user details to ensure the user exists
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(username, null, auths);
+                // Build auth with that principal
+                var auth = new UsernamePasswordAuthenticationToken(
+                        userDetails, null, userDetails.getAuthorities());
+
                 SecurityContextHolder.getContext().setAuthentication(auth);
-            } catch (JwtException e) {
+            } catch (JwtException | UsernameNotFoundException e) {
                 // invalid / expired → leave context empty
             }
         }

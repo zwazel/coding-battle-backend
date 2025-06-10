@@ -7,11 +7,14 @@ import dev.zwazel.domain.User;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.repository.UserRepository;
+import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.LobbyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -24,7 +27,6 @@ import java.util.List;
 public class LobbyController {
 
     private final LobbyService lobbyService;
-
     private final UserRepository userRepository;
 
     /**
@@ -32,21 +34,14 @@ public class LobbyController {
      */
     @PostMapping
     @PreAuthorize("hasRole('USER')")
-    public Lobby createLobby(@RequestBody CreateLobbyRequestDTO request) {
-        List<User> userList = request.players().stream()
-                .map(this::findUser)
-                .toList();
-
-        return lobbyService.createLobby(request.lobbyname(), userList);
+    public Lobby createLobby(@RequestBody CreateLobbyRequestDTO request, @AuthenticationPrincipal CustomUserPrincipal loggedInUser) {
+        return lobbyService.createLobby(request, loggedInUser);
     }
 
     private User findUser(PublicUserDTO player) {
-        User user = null;
-        if (player.id() != null) {
-            user = userRepository.findById(player.id()).orElse(null);
-        }
-        if (user == null && player.username() != null) {
-            user = userRepository.findByUsername(player.username());
+        User user = userRepository.findById(player.id()).orElse(null);
+        if (user == null) {
+            user = userRepository.findByUsername(player.username()).orElse(null);
         }
 
         if (user == null) {

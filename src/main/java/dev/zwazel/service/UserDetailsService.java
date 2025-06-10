@@ -2,6 +2,7 @@ package dev.zwazel.service;
 
 import dev.zwazel.domain.User;
 import dev.zwazel.repository.UserRepository;
+import dev.zwazel.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,9 +17,10 @@ public class UserDetailsService implements org.springframework.security.core.use
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User u = userRepository.findByUsername(username);
+        User u = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
 
-        return new org.springframework.security.core.userdetails.User(
+        return new CustomUserPrincipal(
+                u.getId(),
                 u.getUsername(),
                 u.getPassword(),
                 u.getRoles().stream()
