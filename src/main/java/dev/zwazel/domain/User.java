@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -57,6 +58,12 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles;
 
+    @OneToMany(mappedBy = "owner",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @Singular
+    private Set<Bot> bots = new HashSet<>();
+
     /**
      * Factory that auto-hashes a clear-text password.
      */
@@ -66,6 +73,16 @@ public class User {
                 .password(ENC.encode(rawPassword))
                 .roles(roles)
                 .build();
+    }
+
+    public void addBot(Bot bot) {
+        bots.add(bot);
+        bot.setOwner(this);
+    }
+
+    public void removeBot(Bot bot) {
+        bots.remove(bot);
+        bot.setOwner(null);
     }
 
     @PrePersist

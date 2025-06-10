@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/simulation")
 @RequiredArgsConstructor
-public class SimulationController {
+class SimulationController {
 
     private final SimulationService simulationService;
 

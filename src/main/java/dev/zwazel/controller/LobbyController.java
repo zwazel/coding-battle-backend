@@ -21,7 +21,7 @@ import java.util.List;
 @RequestMapping("/lobbies")
 @Slf4j
 @RequiredArgsConstructor
-public class LobbyController {
+class LobbyController {
 
     private final LobbyService lobbyService;
     private final UserRepository userRepository;

@@ -4,6 +4,7 @@ import dev.zwazel.DTO.CompileResultDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Path;
 
 @FunctionalInterface
 public interface LanguageToWASMCompilerInterface {
@@ -17,5 +18,9 @@ public interface LanguageToWASMCompilerInterface {
      * @param file The source file containing the code to compile.
      * @return The compiled WebAssembly binary as a byte array.
      */
-    CompileResultDTO compile(MultipartFile file) throws IOException, InterruptedException;
+    CompileResultDTO compile(
+            String botName,
+            Path storagePath,
+            MultipartFile file
+    ) throws IOException, InterruptedException;
 }
