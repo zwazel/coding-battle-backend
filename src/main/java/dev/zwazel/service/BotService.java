@@ -67,9 +67,9 @@ public class BotService {
         Bot bot = Bot.builder()
                 .name(botName)
                 .language(language)
-                .sourcePath(source.toString())
+                .sourcePath(source.toString()) // TODO: Do we need to store the source path?
                 .owner(user)
-                .wasmPath(compileResult.wasmPath())
+                .wasmPath(compileResult.wasmPath()) // TODO: Do we need to store the WASM path?
                 .build();
 
         bot = botRepository.save(bot);
