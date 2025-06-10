@@ -3,6 +3,7 @@ package dev.zwazel.security;
 import dev.zwazel.domain.User;
 import dev.zwazel.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -21,65 +22,55 @@ import java.time.Duration;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    @Value("${jwt.defaultExpiration}")
+    private long DEFAULT_TTL;   // 15 min
+
     private final AuthenticationManager authManager;
     private final JwtService jwt;
     private final UserService userService;
 
+    /* ------------ POST /auth/login ---------------- */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRegisterRequest req) {
-        // 1. delegate to AuthenticationManager (uses our UserDetailsService + PW encoder)
         Authentication auth = authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.username(), req.password()));
-
-        // 2. decide TTL
-        Duration ttl = req.rememberMe()
-                ? Duration.ofDays(30)
-                : (req.expiresInSeconds() != null
-                ? Duration.ofSeconds(req.expiresInSeconds())
-                : Duration.ofMinutes(15));
-
-        // 3. create JWT
-        String token = jwt.generate((UserDetails) auth.getPrincipal(), ttl);
-
-        // http-only cookie
-        ResponseCookie cookie = ResponseCookie.from("ACCESS_TOKEN", token)
-                .httpOnly(true).secure(true).path("/").maxAge(ttl).sameSite("Strict").build();
-        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).build();
+        return issueToken((UserDetails) auth.getPrincipal(), req.ttlSeconds());
     }
 
+    /* ----------- POST /auth/register -------------- */
     @PostMapping("/register")
     public ResponseEntity<LoginResponse> register(@RequestBody LoginRegisterRequest req) {
-        // 1. delegate to UserService to create a new user
-        User user = userService.register(req);
-
-        // 2. authenticate the new user
+        User newUser = userService.register(req);   // throws if a username exists
         Authentication auth = authManager.authenticate(
-                new UsernamePasswordAuthenticationToken(user.getUsername(), req.password()));
+                new UsernamePasswordAuthenticationToken(newUser.getUsername(), req.password()));
+        return issueToken((UserDetails) auth.getPrincipal(), req.ttlSeconds());
+    }
 
-        // 3. decide TTL
-        Duration ttl = req.rememberMe()
-                ? Duration.ofDays(30)
-                : (req.expiresInSeconds() != null
-                ? Duration.ofSeconds(req.expiresInSeconds())
-                : Duration.ofMinutes(15));
+    /* -------- helper: mint JWT + cookie ----------- */
+    private ResponseEntity<LoginResponse> issueToken(UserDetails principal, Long ttlSeconds) {
+        long ttl = (ttlSeconds == null || ttlSeconds <= 0) ? DEFAULT_TTL : ttlSeconds;
+        Duration duration = Duration.ofSeconds(ttl);
 
-        // 4. create JWT
-        String token = jwt.generate((UserDetails) auth.getPrincipal(), ttl);
+        String token = jwt.generate(principal, duration);
 
-        // http-only cookie
         ResponseCookie cookie = ResponseCookie.from("ACCESS_TOKEN", token)
-                .httpOnly(true).secure(true).path("/").maxAge(ttl).sameSite("Strict").build();
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .path("/")
+                .maxAge(duration)
+                .build();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(new LoginResponse("Bearer", token, ttl.getSeconds()));
+                .body(new LoginResponse("Bearer", token, ttl));
     }
 
-    public record LoginRegisterRequest(String username, String password,
-                                       boolean rememberMe,
-                                       Long expiresInSeconds) {
+    /* ------------- DTOs --------------------------- */
+    public record LoginRegisterRequest(String username, String password, Long ttlSeconds) {
     }
 
-    public record LoginResponse(String tokenType, String token, long expiresIn) {
+    public record LoginResponse(String tokenType, String token, long expiresInSeconds) {
     }
 }
