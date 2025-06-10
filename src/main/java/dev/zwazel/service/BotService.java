@@ -28,6 +28,9 @@ public class BotService {
             return ResponseEntity.badRequest().build();
         }
 
+        // Sanitize the bot name
+        botName = botName.trim().replaceAll("[^a-zA-Z0-9_\\-]", "");
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
 
