@@ -56,5 +56,9 @@ class GeneralSeeder implements CommandLineRunner {
                     adminPassword,
                     Set.of(adminRole, userRole)));
         }
+
+        /* at startup check the Bots table, and check if that folder still exists, if not, delete the Bot from the DB */
+        /* Check if the general folder exists of the bot, and then if source and compiled exists */
+
     }
 }
