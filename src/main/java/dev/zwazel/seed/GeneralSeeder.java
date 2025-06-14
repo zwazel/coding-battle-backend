@@ -1,9 +1,7 @@
 package dev.zwazel.seed;
 
-import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.Role;
 import dev.zwazel.domain.User;
-import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
 import jakarta.annotation.Priority;
@@ -25,7 +23,6 @@ import java.util.Set;
 class GeneralSeeder implements CommandLineRunner {
     private final RoleRepository roleRepo;
     private final UserRepository userRepo;
-    private final BotRepository botRepo;
 
     @Value("${admin.username}")
     private String adminUsername;
@@ -58,29 +55,6 @@ class GeneralSeeder implements CommandLineRunner {
             userRepo.save(User.ofPlainPassword(adminUsername,
                     adminPassword,
                     Set.of(adminRole, userRole)));
-        }
-
-        /* at startup check the Bots table, and check if that folder still exists, if not, delete the Bot from the DB */
-        /* Check if the general folder exists of the bot, and then if source and compiled exists */
-        for (Bot bot : botRepo.findAll()) {
-            try {
-                Path sourceFile = Path.of(bot.getSourcePath());
-                Path wasmFile = Path.of(bot.getWasmPath());
-
-                Path botDir = sourceFile.getParent().getParent();
-                Path sourceDir = sourceFile.getParent();
-                Path compiledDir = wasmFile.getParent();
-
-                boolean sourceOk = Files.isDirectory(sourceDir) && Files.exists(sourceFile);
-                boolean compiledOk = Files.isDirectory(compiledDir) && Files.exists(wasmFile);
-                boolean rootOk = Files.isDirectory(botDir);
-
-                if (!(rootOk && sourceOk && compiledOk)) {
-                    botRepo.delete(bot);
-                }
-            } catch (Exception e) {
-                botRepo.delete(bot);
-            }
         }
     }
 }

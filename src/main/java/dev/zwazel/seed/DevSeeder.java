@@ -1,7 +1,9 @@
 package dev.zwazel.seed;
 
+import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.Role;
 import dev.zwazel.domain.User;
+import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
 import jakarta.annotation.Priority;
@@ -13,6 +15,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 
 @Component
@@ -23,6 +27,7 @@ import java.util.Set;
 class DevSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final BotRepository botRepo;
 
     @Value("${roles.user}")
     private String userRolesName;
@@ -47,6 +52,29 @@ class DevSeeder implements CommandLineRunner {
                 continue; // Skip if the User already exists
             }
             userRepository.save(User.ofPlainPassword(username, testUserPassword, Set.of(userRole)));
+        }
+
+        /* at startup check the Bots table, and check if that folder still exists, if not, delete the Bot from the DB */
+        /* Check if the general folder exists of the bot, and then if source and compiled exists */
+        for (Bot bot : botRepo.findAll()) {
+            try {
+                Path sourceFile = Path.of(bot.getSourcePath());
+                Path wasmFile = Path.of(bot.getWasmPath());
+
+                Path botDir = sourceFile.getParent().getParent();
+                Path sourceDir = sourceFile.getParent();
+                Path compiledDir = wasmFile.getParent();
+
+                boolean sourceOk = Files.isDirectory(sourceDir) && Files.exists(sourceFile);
+                boolean compiledOk = Files.isDirectory(compiledDir) && Files.exists(wasmFile);
+                boolean rootOk = Files.isDirectory(botDir);
+
+                if (!(rootOk && sourceOk && compiledOk)) {
+                    botRepo.delete(bot);
+                }
+            } catch (Exception e) {
+                botRepo.delete(bot);
+            }
         }
     }
 }
