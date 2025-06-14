@@ -9,12 +9,17 @@ import dev.zwazel.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -116,6 +121,33 @@ public class BotService {
         botRepository.save(bot);
 
         return ResponseEntity.ok(compileResult);
+    }
+
+    public ResponseEntity<Resource> getBotSource(@NonNull UUID botId, UUID loggedInUserId) throws MalformedURLException {
+        Bot bot = botRepository.findById(botId)
+                .orElseThrow(() -> new EntityNotFoundException("Bot not found with ID: " + botId));
+
+        // Check if the user is the owner of the bot
+        if (!bot.getOwner().getId().equals(loggedInUserId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        Path sourcePath = Path.of(bot.getSourcePath());
+        if (!Files.exists(sourcePath)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Resource file = new UrlResource(sourcePath.toUri());
+
+        if (!file.exists() || !file.isReadable()) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + sourcePath.getFileName() + "\"")
+                .body(file);
     }
 
     // TODO: Update the bot's source file service, and recompile it
