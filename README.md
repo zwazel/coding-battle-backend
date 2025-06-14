@@ -41,3 +41,7 @@ Refer to the controller classes for exact request/response details. This backend
    - Great for Testing/Debugging
 - Frontend hosted on GitHub Pages, Account Management, Coding, Watching of replays, Bot Tests, Lobby Management, Chatting in the lobby (?)
 - Should lobbies even be a thing? Do we need synchronous Lobbies? Wouldn't Async lobbies work good enough? (or no lobbies at all...)
+
+## Inspiration
+- [GLADIABOTS - AI Combat Arena](https://store.steampowered.com/app/871930/GLADIABOTS__AI_Combat_Arena/)
+- [Screeps: Arena](https://store.steampowered.com/app/1137320/Screeps_Arena/)
