@@ -10,13 +10,21 @@ import java.nio.file.Path;
 
 @Getter
 public enum Language {
-    RUST(new RustToWasmCompiler(), "rs"),
-    ;
+    RUST(
+            // create a *fresh* compiler for every invocation (safer if it holds state)
+            (bot, path, file) -> new RustToWasmCompiler()
+                    .compile(bot, path, file),
+            "rs"
+    );
 
+    /**
+     * Warp‑compiler function (a tri‑argument lambda).
+     */
     private final LanguageToWASMCompilerInterface compiler;
 
-    /// The file extension used for this language's source files
-    /// For example, "rs" for Rust
+    /**
+     * File extension for nosy man‑things to recognise source files.
+     */
     private final String fileExtension;
 
     Language(LanguageToWASMCompilerInterface compiler, String fileExtension) {
@@ -24,7 +32,13 @@ public enum Language {
         this.fileExtension = fileExtension;
     }
 
-    public CompileResultDTO compile(String botName, Path storagePath, MultipartFile sourceFile) throws IOException, InterruptedException {
+    /**
+     * Delegates to the captured lambda.
+     */
+    public CompileResultDTO compile(String botName,
+                                    Path storagePath,
+                                    MultipartFile sourceFile)
+            throws IOException, InterruptedException {
         return compiler.compile(botName, storagePath, sourceFile);
     }
 }
