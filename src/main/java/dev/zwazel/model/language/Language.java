@@ -12,8 +12,7 @@ import java.nio.file.Path;
 public enum Language {
     RUST(
             // create a *fresh* compiler for every invocation (safer if it holds state)
-            (bot, path, file) -> new RustToWasmCompiler()
-                    .compile(bot, path, file),
+            new RustToWasmCompiler(),
             "rs"
     );
 

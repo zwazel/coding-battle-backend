@@ -6,7 +6,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Path;
 
-@FunctionalInterface
 public interface LanguageToWASMCompilerInterface {
     static String truncate(String s) {
         return s.length() > 4096 ? s.substring(0, 4096) + "\n…truncated…" : s;
