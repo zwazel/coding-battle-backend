@@ -6,6 +6,8 @@ import dev.zwazel.domain.User;
 import dev.zwazel.model.language.Language;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -72,6 +74,48 @@ public class BotService {
         bot = botRepository.save(bot);
 
         return ResponseEntity.ok(new CreateBotResponse(bot.getId(), compileResult));
+    }
+
+    public ResponseEntity<CompileResultDTO> updateBotSource(@NonNull UUID botId, @NonNull MultipartFile sourceFile, UUID userId) throws IOException {
+        Bot bot = botRepository.findById(botId)
+                .orElseThrow(() -> new EntityNotFoundException("Bot not found with ID: " + botId));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
+
+        // Check if the user is the owner of the bot
+        if (!bot.getOwner().getId().equals(user.getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        // Save the new source file
+        Path savedSourcePath;
+        try {
+            savedSourcePath = storageService.replaceSource(bot, sourceFile);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new CompileResultDTO(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save source file", null, null));
+        }
+
+        // Compile the new source file
+        Path compiledDir = storageService.compiledDir(userId, bot.getName());
+        CompileResultDTO compileResult;
+        try {
+            Files.createDirectories(compiledDir);
+            compileResult = bot.getLanguage().compile(bot.getName(), compiledDir, sourceFile);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new CompileResultDTO(HttpStatus.BAD_REQUEST, "Compilation failed: " + e.getMessage(), null, null));
+        }
+
+        if (Objects.requireNonNull(compileResult.status()) == HttpStatus.BAD_REQUEST) {
+            return ResponseEntity.badRequest().body(compileResult);
+        }
+
+        // Update the bot's source path and WASM path
+        bot.setSourcePath(savedSourcePath.toString());
+        bot.setWasmPath(compileResult.wasmPath());
+        botRepository.save(bot);
+
+        return ResponseEntity.ok(compileResult);
     }
 
     // TODO: Update the bot's source file service, and recompile it

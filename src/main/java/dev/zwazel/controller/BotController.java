@@ -1,5 +1,6 @@
 package dev.zwazel.controller;
 
+import dev.zwazel.DTO.CompileResultDTO;
 import dev.zwazel.model.language.Language;
 import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.BotService;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @RestController
@@ -26,5 +28,23 @@ class BotController {
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
     ) throws IOException {
         return botService.createBot(botName, language, sourceFile, loggedInUser.getId());
+    }
+
+    /**
+     * Updates the source code of an existing bot and recompiles it.
+     *
+     * @param botId        The ID of the bot to update.
+     * @param sourceFile   The new source file to upload.
+     * @param loggedInUser The currently authenticated user. Automatically injected by Spring Security.
+     * @return A ResponseEntity containing the CompileResultDTO with the compilation result.
+     * @throws IOException If an error occurs while reading the source file or during compilation.
+     */
+    @PutMapping("/{botId}/source")
+    public ResponseEntity<CompileResultDTO> updateBotSource(
+            @PathVariable @NonNull UUID botId,
+            @RequestPart @NonNull MultipartFile sourceFile,
+            @AuthenticationPrincipal CustomUserPrincipal loggedInUser
+    ) throws IOException {
+        return botService.updateBotSource(botId, sourceFile, loggedInUser.getId());
     }
 }
