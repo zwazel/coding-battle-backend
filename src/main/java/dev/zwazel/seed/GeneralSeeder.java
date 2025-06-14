@@ -1,5 +1,6 @@
 package dev.zwazel.seed;
 
+import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.Role;
 import dev.zwazel.domain.User;
 import dev.zwazel.repository.BotRepository;
@@ -61,7 +62,7 @@ class GeneralSeeder implements CommandLineRunner {
 
         /* at startup check the Bots table, and check if that folder still exists, if not, delete the Bot from the DB */
         /* Check if the general folder exists of the bot, and then if source and compiled exists */
-        for (var bot : botRepo.findAll()) {
+        for (Bot bot : botRepo.findAll()) {
             try {
                 Path sourceFile = Path.of(bot.getSourcePath());
                 Path wasmFile = Path.of(bot.getWasmPath());
