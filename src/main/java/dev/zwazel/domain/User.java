@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -12,7 +13,7 @@ import java.util.UUID;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = "username_lower")
+                @UniqueConstraint(name = "uk_username", columnNames = "username")
         }
 )
 @Getter
@@ -35,9 +36,6 @@ public class User {
     @Column(nullable = false, length = 40)
     private String username;               // as entered
 
-    @Column(name = "username_lower", nullable = false, length = 40)
-    private String usernameLower;          // enforced unique
-
     /**
      * BCrypt-hashed password
      */
@@ -57,6 +55,12 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles;
 
+    @OneToMany(mappedBy = "owner",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @Singular
+    private Set<Bot> bots = new HashSet<>();
+
     /**
      * Factory that auto-hashes a clear-text password.
      */
@@ -68,11 +72,13 @@ public class User {
                 .build();
     }
 
-    @PrePersist
-    @PreUpdate
-    private void normalizeUsername() {
-        if (this.username != null) {
-            this.usernameLower = this.username.toLowerCase();
-        }
+    public void addBot(Bot bot) {
+        bots.add(bot);
+        bot.setOwner(this);
+    }
+
+    public void removeBot(Bot bot) {
+        bots.remove(bot);
+        bot.setOwner(null);
     }
 }

@@ -44,14 +44,14 @@ class GeneralSeeder implements CommandLineRunner {
         Files.createDirectories(Path.of("artifacts"));
 
         /* ---------- ensure roles exist (create-if-absent) ------------ */
-        Role adminRole = roleRepo.findByName(adminRoleName)
+        Role adminRole = roleRepo.findByNameIgnoreCase(adminRoleName)
                 .orElseGet(() -> roleRepo.save(Role.builder().name(adminRoleName).build()));
 
-        Role userRole = roleRepo.findByName(userRoleName)
+        Role userRole = roleRepo.findByNameIgnoreCase(userRoleName)
                 .orElseGet(() -> roleRepo.save(Role.builder().name(userRoleName).build()));
 
         /* ---------- create admin user only if missing ---------------- */
-        if (userRepo.findByUsernameLower(adminUsername.toLowerCase()).isEmpty()) {
+        if (userRepo.findByUsernameIgnoreCase(adminUsername).isEmpty()) {
             userRepo.save(User.ofPlainPassword(adminUsername,
                     adminPassword,
                     Set.of(adminRole, userRole)));
