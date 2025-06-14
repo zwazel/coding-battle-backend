@@ -6,12 +6,14 @@ import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.BotService;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -46,5 +48,17 @@ class BotController {
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
     ) throws IOException {
         return botService.updateBotSource(botId, sourceFile, loggedInUser.getId());
+    }
+
+    @GetMapping("/{botId}/source")
+    public ResponseEntity<Resource> getBotSource(
+            @PathVariable @NonNull UUID botId,
+            @AuthenticationPrincipal CustomUserPrincipal loggedInUser
+    ) {
+        try {
+            return botService.getBotSource(botId, loggedInUser.getId());
+        } catch (MalformedURLException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
