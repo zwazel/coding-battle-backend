@@ -85,8 +85,6 @@ public class LobbyService {
         sink.tryEmitNext(new LobbyEvent(LobbyEventType.WAITING,
                 "Lobby created, waiting for simulation to start"));
 
-        // TODO: ensure lobbyname is unique, maybe throw an exception if it already exists
-
         lobbies.put(request.lobbyname().toLowerCase(), new LobbyData(lobby, sink));
 
         return lobby;
