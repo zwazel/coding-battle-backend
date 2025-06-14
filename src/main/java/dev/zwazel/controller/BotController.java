@@ -10,6 +10,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/bots")
@@ -22,7 +24,7 @@ class BotController {
             @RequestParam @NonNull Language language,
             @RequestPart @NonNull MultipartFile sourceFile,
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
-    ) {
+    ) throws IOException {
         return botService.createBot(botName, language, sourceFile, loggedInUser.getId());
     }
 }

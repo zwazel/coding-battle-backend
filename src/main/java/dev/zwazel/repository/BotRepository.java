@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 
 public interface BotRepository extends JpaRepository<Bot, UUID> {
-    boolean existsByNameLowerAndOwner(String nameLower, User user);
+    boolean existsByNameIgnoreCaseAndOwner(String nameLower, User user);
 }

@@ -13,7 +13,7 @@ import java.util.UUID;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(columnNames = "username_lower")
+                @UniqueConstraint(name = "uk_username", columnNames = "username")
         }
 )
 @Getter
@@ -35,9 +35,6 @@ public class User {
 
     @Column(nullable = false, length = 40)
     private String username;               // as entered
-
-    @Column(name = "username_lower", nullable = false, length = 40)
-    private String usernameLower;          // enforced unique
 
     /**
      * BCrypt-hashed password
@@ -83,13 +80,5 @@ public class User {
     public void removeBot(Bot bot) {
         bots.remove(bot);
         bot.setOwner(null);
-    }
-
-    @PrePersist
-    @PreUpdate
-    private void normalizeUsername() {
-        if (this.username != null) {
-            this.usernameLower = this.username.toLowerCase();
-        }
     }
 }

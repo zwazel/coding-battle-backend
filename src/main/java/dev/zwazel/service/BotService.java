@@ -7,12 +7,12 @@ import dev.zwazel.model.language.Language;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -24,10 +24,9 @@ public class BotService {
     private final BotRepository botRepository;
     private final UserRepository userRepository;
 
-    @Value("${user.code.storage}")
-    private String userCodeStorage;
+    private final StorageService storageService;
 
-    public ResponseEntity<CreateBotResponse> createBot(String botName, Language language, MultipartFile sourceFile, UUID userId) {
+    public ResponseEntity<CreateBotResponse> createBot(String botName, Language language, MultipartFile sourceFile, UUID userId) throws IOException {
         if (botName.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -39,32 +38,22 @@ public class BotService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
 
         // Check if the bot name is already taken
-        if (botRepository.existsByNameLowerAndOwner(botName.toLowerCase(), user)) {
+        if (botRepository.existsByNameIgnoreCaseAndOwner(botName.toLowerCase(), user)) {
             throw new IllegalArgumentException("Bot name already exists for this user");
         }
 
-        Path botDirPath = Path.of(userCodeStorage, "bots", userId.toString(), botName.toLowerCase());
-        String botDir = botDirPath.toString();
-
-        Path source = Path.of(botDir, "source", botName.toLowerCase() + "." + language.getFileExtension());
-        try {
-            // Create directories if they do not exist
-            Files.createDirectories(source.getParent());
-            sourceFile.transferTo(source);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to save bot source file", e);
-        }
+        Path savedSourcePath = storageService.saveSource(userId, botName, language, sourceFile);
 
         // Compile the source file
         // Path to the DIRECTORY of the compiled WASM file
-        Path compiledDir = Path.of(botDir, "compiled");
-        CompileResultDTO compileResult;
+        Path compiledDir = storageService.compiledDir(userId, botName);
+        CompileResultDTO compileResult = null;
         try {
             // Create directories for compiled output
             Files.createDirectories(compiledDir);
             compileResult = language.compile(botName, compiledDir, sourceFile);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new CreateBotResponse(null)); // Return null ID on failure
+            return ResponseEntity.badRequest().body(new CreateBotResponse(null, compileResult)); // Return null ID on failure
         }
 
         if (Objects.requireNonNull(compileResult.status()) == HttpStatus.BAD_REQUEST) {
@@ -75,16 +64,19 @@ public class BotService {
         Bot bot = Bot.builder()
                 .name(botName)
                 .language(language)
-                .sourcePath(source.toString()) // TODO: Do we need to store the source path?
+                .sourcePath(savedSourcePath.toString()) // TODO: Do we need to store the source path?
                 .owner(user)
                 .wasmPath(compileResult.wasmPath()) // TODO: Do we need to store the WASM path?
                 .build();
 
         bot = botRepository.save(bot);
 
-        return ResponseEntity.ok(new CreateBotResponse(bot.getId()));
+        return ResponseEntity.ok(new CreateBotResponse(bot.getId(), compileResult));
     }
 
-    public record CreateBotResponse(UUID id) {
+    // TODO: Update the bot's source file service, and recompile it
+
+    public record CreateBotResponse(UUID id, CompileResultDTO compileResult) {
+
     }
 }

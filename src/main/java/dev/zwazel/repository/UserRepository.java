@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
-    Optional<User> findByUsernameLower(String username);
+    Optional<User> findByUsernameIgnoreCase(String username);
 
-    boolean existsByUsernameLower(String username);
+    boolean existsByUsernameIgnoreCase(String username);
 }

@@ -83,6 +83,6 @@ public class RustToWasmCompiler implements LanguageToWASMCompilerInterface {
                 crate-type = ["cdylib"]
                 
                 [dependencies]
-                """.formatted(botName.replaceAll("[^a-zA-Z0-9]", "_"));
+                """.formatted(botName.toLowerCase().replaceAll("[^a-zA-Z0-9]", "_"));
     }
 }
