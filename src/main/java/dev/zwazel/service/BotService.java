@@ -7,6 +7,7 @@ import dev.zwazel.model.language.Language;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,9 @@ import java.util.UUID;
 public class BotService {
     private final BotRepository botRepository;
     private final UserRepository userRepository;
+
+    @Value("${user.code.storage}")
+    private String userCodeStorage;
 
     public ResponseEntity<CreateBotResponse> createBot(String botName, Language language, MultipartFile sourceFile, UUID userId) {
         if (botName.isBlank()) {
@@ -39,7 +43,8 @@ public class BotService {
             throw new IllegalArgumentException("Bot name already exists for this user");
         }
 
-        String botDir = "artifacts/bots/" + userId + "/" + botName.toLowerCase();
+        Path botDirPath = Path.of(userCodeStorage, "bots", userId.toString(), botName.toLowerCase());
+        String botDir = botDirPath.toString();
 
         Path source = Path.of(botDir, "source", botName.toLowerCase() + "." + language.getFileExtension());
         try {
