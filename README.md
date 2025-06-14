@@ -30,3 +30,14 @@ Once running you can interact with the API using any HTTP client. Typical steps 
 
 Refer to the controller classes for exact request/response details. This backend is meant to be extended with custom game logic and additional languages.
 
+## Planned/Ideas
+- Leaderboard
+   - Daily/Weekly/Monthly/Yearly/All Time, idk something like that?
+   - {username}/{bot}/{version}
+      - So a Bot could appear multiple times, but not multiple times per version
+- The Sim should be able to run locally, against example bots or other user bots
+   - Local runs don't count for statistics/leaderboards
+   - Should be fairly easy, because the sim is just bevy under a different feature flag, so the main sim already runs the WASM code and such. it just needs to load them in the browser
+   - Great for Testing/Debugging
+- Frontend hosted on GitHub Pages, Account Management, Coding, Watching of replays, Bot Tests, Lobby Management, Chatting in the lobby (?)
+- Should lobbies even be a thing? Do we need synchronous Lobbies? Wouldn't Async lobbies work good enough? (or no lobbies at all...)
