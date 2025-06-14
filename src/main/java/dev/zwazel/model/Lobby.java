@@ -15,9 +15,9 @@ import java.util.List;
 public class Lobby {
     private final String name;
     private final List<LobbyUser> players;
-    private final List<LobbyUser> spectators;
+    private final List<LobbyUser> spectators = List.of();
     private int maxPlayers;
-    private int maxSpectators;
+    private boolean spectatorsAllowed;
 
     @JsonIgnore
     private GameState gameState;

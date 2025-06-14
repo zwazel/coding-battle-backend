@@ -9,7 +9,6 @@ import java.util.List;
 public record AllLobbiesDTO(
         String name,
         int maxPlayers,
-        int maxSpectators,
         int currentPlayers,
         int currentSpectators
 ) {
@@ -19,7 +18,6 @@ public record AllLobbiesDTO(
                         AllLobbiesDTO.builder()
                                 .name(lobby.getName())
                                 .maxPlayers(lobby.getMaxPlayers())
-                                .maxSpectators(lobby.getMaxSpectators())
                                 .currentPlayers(lobby.getPlayers().size())
                                 .currentSpectators(lobby.getSpectators().size())
                                 .build()

@@ -8,6 +8,7 @@ import java.util.UUID;
 public record LobbyUser(
         UUID userId,
         String username,
-        boolean isHost
+        boolean isHost,
+        UUID selectedBotId
 ) {
 }
