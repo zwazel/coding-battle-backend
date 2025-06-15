@@ -77,8 +77,8 @@ class SecurityConfig {
 
                         /* USER role */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/**/user/**"),
-                                AntPathRequestMatcher.antMatcher("/api/bots/**")
+                                AntPathRequestMatcher.antMatcher("/api/bots/**"),
+                                AntPathRequestMatcher.antMatcher("/api/users/**")
                         ).hasRole("USER")
                 )
 

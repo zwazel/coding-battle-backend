@@ -10,32 +10,31 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    @Value("${jwt.defaultExpiration}")
-    private long DEFAULT_TTL;   // 15 min
-
     private final AuthenticationManager authManager;
     private final JwtService jwt;
     private final UserService userService;
+    @Value("${jwt.defaultExpiration}")
+    private long DEFAULT_TTL;   // 15 min
 
     /* ------------ POST /auth/login ---------------- */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRegisterRequest req) {
         Authentication auth = authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.username(), req.password()));
-        return issueToken((UserDetails) auth.getPrincipal(), req.ttlSeconds());
+        return issueToken((CustomUserPrincipal) auth.getPrincipal(), req.ttlSeconds());
     }
 
     /* ----------- POST /auth/register -------------- */
@@ -44,11 +43,11 @@ public class AuthController {
         User newUser = userService.register(req);   // throws if a username exists
         Authentication auth = authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(newUser.getUsername(), req.password()));
-        return issueToken((UserDetails) auth.getPrincipal(), req.ttlSeconds());
+        return issueToken((CustomUserPrincipal) auth.getPrincipal(), req.ttlSeconds());
     }
 
     /* -------- helper: mint JWT + cookie ----------- */
-    private ResponseEntity<LoginResponse> issueToken(UserDetails principal, Long ttlSeconds) {
+    private ResponseEntity<LoginResponse> issueToken(CustomUserPrincipal principal, Long ttlSeconds) {
         long ttl = (ttlSeconds == null || ttlSeconds <= 0) ? DEFAULT_TTL : ttlSeconds;
         Duration duration = Duration.ofSeconds(ttl);
 
@@ -64,13 +63,13 @@ public class AuthController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(new LoginResponse("Bearer", token, ttl));
+                .body(new LoginResponse(principal.getId(), "Bearer", token, ttl));
     }
 
     /* ------------- DTOs --------------------------- */
     public record LoginRegisterRequest(String username, String password, Long ttlSeconds) {
     }
 
-    public record LoginResponse(String tokenType, String token, long expiresInSeconds) {
+    public record LoginResponse(UUID id, String tokenType, String token, long expiresInSeconds) {
     }
 }

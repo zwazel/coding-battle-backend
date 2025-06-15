@@ -1,6 +1,6 @@
-package dev.zwazel.controller;
+package dev.zwazel.api.controller;
 
-import dev.zwazel.DTO.CompileResultDTO;
+import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.model.language.Language;
 import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.BotService;

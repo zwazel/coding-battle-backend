@@ -1,6 +1,6 @@
 package dev.zwazel.model.language.compilers;
 
-import dev.zwazel.DTO.CompileResultDTO;
+import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.model.language.LanguageToWASMCompilerInterface;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartFile;

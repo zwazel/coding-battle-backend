@@ -1,6 +1,6 @@
 package dev.zwazel.service;
 
-import dev.zwazel.DTO.CompileResultDTO;
+import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.User;
 import dev.zwazel.model.language.Language;

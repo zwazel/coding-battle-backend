@@ -1,7 +1,7 @@
-package dev.zwazel.controller;
+package dev.zwazel.api.controller;
 
-import dev.zwazel.DTO.AllLobbiesDTO;
-import dev.zwazel.DTO.CreateLobbyRequestDTO;
+import dev.zwazel.api.model.DTO.AllLobbiesDTO;
+import dev.zwazel.api.model.DTO.CreateLobbyRequestDTO;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.repository.UserRepository;

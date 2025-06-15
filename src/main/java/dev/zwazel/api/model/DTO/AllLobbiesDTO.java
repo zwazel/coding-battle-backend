@@ -1,4 +1,4 @@
-package dev.zwazel.DTO;
+package dev.zwazel.api.model.DTO;
 
 import dev.zwazel.model.Lobby;
 import lombok.Builder;

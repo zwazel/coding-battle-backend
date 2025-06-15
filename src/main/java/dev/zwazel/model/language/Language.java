@@ -1,6 +1,6 @@
 package dev.zwazel.model.language;
 
-import dev.zwazel.DTO.CompileResultDTO;
+import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.model.language.compilers.RustToWasmCompiler;
 import lombok.Getter;
 import org.springframework.web.multipart.MultipartFile;

@@ -1,4 +1,4 @@
-package dev.zwazel.controller;
+package dev.zwazel.api.controller;
 
 import dev.zwazel.service.SimulationService;
 import lombok.RequiredArgsConstructor;

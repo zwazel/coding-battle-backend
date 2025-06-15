@@ -1,6 +1,6 @@
 package dev.zwazel.service;
 
-import dev.zwazel.DTO.CreateLobbyRequestDTO;
+import dev.zwazel.api.model.DTO.CreateLobbyRequestDTO;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
 import dev.zwazel.model.LobbyEventType;
