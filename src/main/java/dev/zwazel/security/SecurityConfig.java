@@ -1,13 +1,10 @@
 package dev.zwazel.security;
 
-import dev.zwazel.service.UserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
-import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -65,7 +62,7 @@ class SecurityConfig {
                         /* Open to everyone */
                         .pathMatchers(
                                 /* Public */
-                                "/**/public/**",
+                                "/public/**",
                                 /* Auth */
                                 "/auth/**",
                                 /* Lobbies */
@@ -81,8 +78,7 @@ class SecurityConfig {
                                 "/bots/**",
                                 "/users/**"
                         ).hasRole(userRoleName)
-
-                        .anyExchange().authenticated())
+                )
                 .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
         ;
         /*.exceptionHandling(ex -> ex
@@ -104,7 +100,7 @@ class SecurityConfig {
         return http.build();
     }
 
-    // expose AuthenticationManager that AuthController uses
+    /*// expose AuthenticationManager that AuthController uses
     @Bean
     ReactiveAuthenticationManager authManager(UserDetailsService uds,
                                               PasswordEncoder encoder) {
@@ -114,7 +110,7 @@ class SecurityConfig {
 
         auth.setPasswordEncoder(encoder);
         return auth;
-    }
+    }*/
 
     @Bean
     PasswordEncoder encoder() {

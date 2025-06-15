@@ -1,12 +1,14 @@
 package dev.zwazel.repository;
 
 import dev.zwazel.domain.Role;
-import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 
-public interface RoleRepository extends ReactiveCrudRepository<Role, UUID> {
+@Repository
+public interface RoleRepository extends R2dbcRepository<Role, UUID> {
     Mono<Role> findByNameIgnoreCase(String role);
 
     Mono<Boolean> existsByNameIgnoreCase(String roleName);

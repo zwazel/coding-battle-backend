@@ -1,14 +1,14 @@
 package dev.zwazel.repository;
 
 import dev.zwazel.domain.User;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
-import java.util.Optional;
 import java.util.UUID;
 
-public interface UserRepository extends ReactiveCrudRepository<User, UUID> {
+@Repository
+public interface UserRepository extends R2dbcRepository<User, UUID> {
     Mono<User> findByUsernameIgnoreCase(String username);
 
     Mono<Boolean> existsByUsernameIgnoreCase(String username);
