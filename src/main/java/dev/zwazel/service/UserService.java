@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.Set;
 
@@ -21,13 +22,24 @@ public class UserService {
     @Value("${roles.user}")
     private String userRoleName;
 
-    public User register(AuthController.LoginRegisterRequest req) {
-        if (userRepository.existsByUsernameIgnoreCase((req.username()))) {
-            throw new IllegalArgumentException("Username already exists");
-        }
+    public Mono<User> register(AuthController.LoginRegisterRequest req) {
+        return userRepository                // 1) does that username exist?
+            .existsByUsernameIgnoreCase(req.username())
+            .flatMap(exists -> {
+                if (exists) {
+                    // squeal early—reactively!
+                    return Mono.error(new IllegalArgumentException("Username already exists"));
+                }
 
-        User user = User.ofPlainPassword(req.username(), req.password(),
-                Set.of(roleRepository.findByNameIgnoreCase(userRoleName).orElseThrow(() -> new IllegalStateException("User role not found"))));
-        return userRepository.save(user);
+                // 2) fetch role… reactively
+                return roleRepository.findByNameIgnoreCase(userRoleName)
+                    .switchIfEmpty(Mono.error(
+                        new IllegalStateException("User role not found")))
+                    // 3) build entity
+                    .map(role -> User.ofPlainPassword(
+                            req.username(), req.password(), Set.of(role)))
+                    // 4) save, still non‑blocking
+                    .flatMap(userRepository::save);
+            });
     }
 }

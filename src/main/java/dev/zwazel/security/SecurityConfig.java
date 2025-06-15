@@ -3,36 +3,35 @@ package dev.zwazel.security;
 import dev.zwazel.service.UserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.ProviderManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
 @Configuration
-@EnableMethodSecurity
+@EnableWebFluxSecurity
 @RequiredArgsConstructor
 class SecurityConfig {
-    private final JwtAuthFilter jwtFilter;
-
     private final Environment env;
+
+    @Value("${roles.admin}")
+    private String adminRoleName;
+
+    @Value("${roles.user}")
+    private String userRoleName;
 
     @Value("${cors.allowed-origins:http://localhost:3000}")
     private String corsAllowedOrigins;
@@ -47,56 +46,59 @@ class SecurityConfig {
     private boolean corsAllowCredentials;
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
+    SecurityWebFilterChain springSecurityFilterChain(
+            ServerHttpSecurity http,
+            JwtAuthenticationManager authMgr,
+            JwtServerAuthenticationConverter conv,
+            CorsConfigurationSource corsConfigurationSource
+    ) {
+        AuthenticationWebFilter jwtFilter = new AuthenticationWebFilter(authMgr);
+        jwtFilter.setServerAuthenticationConverter(conv);
+
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
 
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                //.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                /* Frame header disabled only for H2 console */
-                .headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
-
-                /* Path-based rules */
-                .authorizeHttpRequests(auth -> auth
-                        /* open to everyone */
-                        .requestMatchers(
+                .authorizeExchange(ex -> ex
+                        /* Open to everyone */
+                        .pathMatchers(
                                 /* Public */
-                                AntPathRequestMatcher.antMatcher("/api/**/public/**"),
+                                "/**/public/**",
                                 /* Auth */
-                                AntPathRequestMatcher.antMatcher("/api/auth/**"),
+                                "/auth/**",
                                 /* Lobbies */
-                                AntPathRequestMatcher.antMatcher("/api/lobbies/**")
+                                "/lobbies/**"
                         )
                         .permitAll()
 
                         /* ADMIN role */
-                        .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/**/admin/**")
-                        ).hasRole("ADMIN")
+                        .pathMatchers("/admin/**").hasRole(adminRoleName)
 
                         /* USER role */
-                        .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/bots/**"),
-                                AntPathRequestMatcher.antMatcher("/api/users/**")
-                        ).hasRole("USER")
-                )
+                        .pathMatchers(
+                                "/bots/**",
+                                "/users/**"
+                        ).hasRole(userRoleName)
 
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                        .anyExchange().authenticated())
+                .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+        ;
+        /*.exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new JwtAuthenticationEntryPoint(env))
+                        .accessDeniedHandler(new JwtAccessDeniedHandler(env)))*/
 
         if (env.matchesProfiles("dev")) {
-            // allow H2 console
-            http
-                    .authorizeHttpRequests(auth -> auth
-                            .requestMatchers(PathRequest.toH2Console()).permitAll()
-                    )
-            ;
+            http.authorizeExchange(ex -> ex
+                    .pathMatchers("/h2-console/**").permitAll()
+            );
         }
 
         /* Any other request requires authentication */
         http
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().authenticated()
+                .authorizeExchange(ex -> ex
+                        .anyExchange().authenticated()
                 );
 
         return http.build();
@@ -104,11 +106,14 @@ class SecurityConfig {
 
     // expose AuthenticationManager that AuthController uses
     @Bean
-    AuthenticationManager authManager(UserDetailsService uds, PasswordEncoder enc) {
-        DaoAuthenticationProvider dao = new DaoAuthenticationProvider();
-        dao.setUserDetailsService(uds);
-        dao.setPasswordEncoder(enc);
-        return new ProviderManager(dao);
+    ReactiveAuthenticationManager authManager(UserDetailsService uds,
+                                              PasswordEncoder encoder) {
+
+        UserDetailsRepositoryReactiveAuthenticationManager auth =
+                new UserDetailsRepositoryReactiveAuthenticationManager(uds);
+
+        auth.setPasswordEncoder(encoder);
+        return auth;
     }
 
     @Bean

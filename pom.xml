@@ -39,10 +39,6 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
@@ -94,9 +90,10 @@
             <artifactId>jjwt</artifactId>
             <version>0.12.6</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.springframework.hateoas/spring-hateoas -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-hateoas</artifactId>
+            <groupId>org.springframework.hateoas</groupId>
+            <artifactId>spring-hateoas</artifactId>
         </dependency>
     </dependencies>
 

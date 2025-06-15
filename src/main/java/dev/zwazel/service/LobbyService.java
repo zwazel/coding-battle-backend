@@ -13,9 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,10 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @RequiredArgsConstructor
 public class LobbyService {
-    private final UserRepository userRepository;
-    private final BotRepository botRepository;
 
-    // A simple in-memory map of lobbyId -> Lobby
+    private final UserRepository userRepository;   // ⚡ reactive
+    private final BotRepository botRepository;     // ⚡ reactive
+
     private final Map<String, LobbyData> lobbies = new ConcurrentHashMap<>();
 
     @Value("${lobby.players.max}")
@@ -36,90 +37,95 @@ public class LobbyService {
     @Value("${lobby.players.min}")
     private int minPlayers;
 
-    /**
-     * Create a new lobby with a generated ID.
-     */
-    public Lobby createLobby(CreateLobbyRequestDTO request, CustomUserPrincipal loggedInUser) {
-        // Validate the request
-        if (request.lobbyname() == null || request.lobbyname().isEmpty()) {
-            throw new IllegalArgumentException("Lobby name cannot be empty");
-        }
+    /*─────────────────────────────────────────────────────
+     *  CREATE LOBBY  –  returns Mono<Lobby>
+     *────────────────────────────────────────────────────*/
+    public Mono<Lobby> createLobby(CreateLobbyRequestDTO req,
+                                   CustomUserPrincipal loggedInUser) {
 
-        if (request.maxPlayers() < minPlayers || request.maxPlayers() > maxPlayers) {
-            throw new IllegalArgumentException("Max players must be between " + minPlayers + " and " + maxPlayers);
-        }
+        final String key = (req.lobbyname() == null) ? "" : req.lobbyname().toLowerCase();
 
-        // Check if the user exists in the repository
-        if (!userRepository.existsById(loggedInUser.getId())) {
-            throw new EntityNotFoundException("User does not exist");
-        }
+        /* Stage 1 – cheap in‑memory validations */
+        Mono<CreateLobbyRequestDTO> validated = Mono.defer(() -> {
+            if (key.isBlank())
+                return Mono.error(new IllegalArgumentException("Lobby name cannot be empty"));
+            if (req.maxPlayers() < minPlayers || req.maxPlayers() > maxPlayers)
+                return Mono.error(new IllegalArgumentException(
+                        "Max players must be between %d and %d".formatted(minPlayers, maxPlayers)));
+            if (lobbies.containsKey(key))
+                return Mono.error(new IllegalArgumentException("Lobby name already exists"));
+            return Mono.just(req);           // pass downstream
+        });
 
-        // Check if the bot exists
-        if (request.selectedBotId() != null && !botRepository.existsById(request.selectedBotId())) {
-            throw new EntityNotFoundException("Bot does not exist");
-        }
+        /* Stage 2 – reactive repository checks */
+        return validated
+                .flatMap(r -> userRepository.existsById(loggedInUser.getId())
+                        .filter(Boolean::booleanValue)
+                        .switchIfEmpty(Mono.error(
+                                new EntityNotFoundException("User does not exist")))
+                        .thenReturn(r))
+                .flatMap(r -> {
+                    if (r.selectedBotId() == null) return Mono.just(r);
+                    return botRepository.existsById(r.selectedBotId())
+                            .filter(Boolean::booleanValue)
+                            .switchIfEmpty(Mono.error(
+                                    new EntityNotFoundException("Bot does not exist")))
+                            .thenReturn(r);
+                })
+                /* Stage 3 – build lobby & register in map (synchronous, CPU‑cheap) */
+                .map(r -> {
+                    LobbyUser host = LobbyUser.builder()
+                            .userId(loggedInUser.getId())
+                            .username(loggedInUser.getUsername())
+                            .isHost(true)
+                            .selectedBotId(r.selectedBotId())
+                            .build();
 
-        // Check if the lobby name already exists (ignoring case)
-        if (lobbies.containsKey(request.lobbyname().toLowerCase())) {
-            throw new IllegalArgumentException("Lobby name already exists");
-        }
+                    Lobby lobby = Lobby.builder()
+                            .name(r.lobbyname())
+                            .maxPlayers(r.maxPlayers())
+                            .players(List.of(host))
+                            .spectatorsAllowed(r.spectatorsAllowed())
+                            .build();
 
-        LobbyUser hostUser = LobbyUser.builder()
-                .userId(loggedInUser.getId())
-                .username(loggedInUser.getUsername())
-                .isHost(true)
-                .selectedBotId(request.selectedBotId())
-                .build();
+                    Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
+                    sink.tryEmitNext(new LobbyEvent(
+                            LobbyEventType.WAITING,
+                            "Lobby created, waiting for simulation to start"));
 
-        Lobby lobby = Lobby.builder()
-                .name(request.lobbyname())
-                .maxPlayers(request.maxPlayers())
-                .players(List.of(hostUser))
-                .spectatorsAllowed(request.spectatorsAllowed())
-                .build();
-
-        // Create a sink that replays the last event for new subscribers
-        Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
-
-        // Emit an initial WAITING event
-        sink.tryEmitNext(new LobbyEvent(LobbyEventType.WAITING,
-                "Lobby created, waiting for simulation to start"));
-
-        lobbies.put(request.lobbyname().toLowerCase(), new LobbyData(lobby, sink));
-
-        return lobby;
+                    lobbies.put(key, new LobbyData(lobby, sink));
+                    return lobby;
+                });
     }
 
-    /**
-     * Get an existing lobby by ID (or null if not found).
-     */
-    public Lobby getLobby(String lobbyId) {
-        LobbyData data = lobbies.get(lobbyId.toLowerCase());
-        return (data != null) ? data.lobby : null;
+    /*─────────────────────────────────────────────────────
+     *  QUERY HELPERS
+     *────────────────────────────────────────────────────*/
+    public Mono<Lobby> getLobby(String lobbyId) {
+        return Mono.justOrEmpty(lobbies.get(lobbyId.toLowerCase()))
+                .map(ld -> ld.lobby);
     }
 
-    public Sinks.Many<LobbyEvent> getSink(String lobbyId) {
-        LobbyData data = lobbies.get(lobbyId.toLowerCase());
-        return (data != null) ? data.sink : null;
+    public Mono<Sinks.Many<LobbyEvent>> getSink(String lobbyId) {
+        return Mono.justOrEmpty(lobbies.get(lobbyId.toLowerCase()))
+                .map(ld -> ld.sink);
     }
 
-    public List<Lobby> getAllLobbies() {
-        List<Lobby> result = new ArrayList<>();
-        for (LobbyData ld : lobbies.values()) {
-            // TODO: Only return ID of the lobby, no additional data
-            result.add(ld.lobby);
-        }
-        return result;
+    public Flux<Lobby> getAllLobbies() {
+        return Flux.fromIterable(lobbies.values())
+                .map(ld -> ld.lobby);
     }
 
-    public void removeLobby(String lobbyId) {
-        lobbies.remove(lobbyId.toLowerCase());
+    public Mono<Void> removeLobby(String lobbyId) {
+        return Mono.fromRunnable(() -> lobbies.remove(lobbyId.toLowerCase()));
     }
 
-    // We’ll store both the Lobby object and the SSE sink in one container
+    /*─────────────────────────────────────────────────────
+     *  INTERNAL DATA HOLDER
+     *────────────────────────────────────────────────────*/
     static class LobbyData {
-        Lobby lobby;
-        Sinks.Many<LobbyEvent> sink;
+        final Lobby lobby;
+        final Sinks.Many<LobbyEvent> sink;
 
         LobbyData(Lobby lobby, Sinks.Many<LobbyEvent> sink) {
             this.lobby = lobby;

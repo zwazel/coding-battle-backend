@@ -6,16 +6,19 @@ import dev.zwazel.domain.User;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
-import jakarta.annotation.Priority;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -23,99 +26,130 @@ import java.util.Set;
 
 @Component
 @Profile("dev")
-@RequiredArgsConstructor
 @DependsOn("generalSeeder")
-@Priority(2)
-class DevSeeder implements CommandLineRunner {
-    private final RoleRepository roleRepository;
-    private final UserRepository userRepository;
+@Order(2)                          // replaces @Priority for ApplicationRunner
+@RequiredArgsConstructor
+@Slf4j
+public class DevSeeder implements ApplicationRunner {
+
+    private final RoleRepository roleRepo;
+    private final UserRepository userRepo;
     private final BotRepository botRepo;
 
     @Value("${roles.user}")
-    private String userRolesName;
+    private String userRoleName;
 
     @Value("${dev.user.password}")
-    private String testUserPassword;
+    private String pw;
 
     @Value("${dev.user.username}")
-    private String testUserUsername;
+    private String baseUser;
 
     @Value("${dev.user.count}")
-    private int testUserCount;
+    private int userCount;
 
-    /**
-     * Deletes a directory tree in depth‑first order (Files.walk is Java 8+).
-     */
-    private static void deleteRecursively(Path dir) throws IOException {
-        if (dir == null || Files.notExists(dir)) {
-            System.out.println("DevSeeder: Directory does not exist or is null: " + dir);
-            return; // Nothing to delete
-        }
-
-        Files.walk(dir)
-                .sorted(Comparator.reverseOrder())   // children before parent
-                .forEach(path -> {
-                    try {
-                        Files.deleteIfExists(path);
-                    } catch (IOException ex) {
-                        // log.warn("Failed to delete {}", path, ex);
-                    }
-                });
-    }
-
-    /**
-     * Failsafe: swallow all exceptions—rats leave no traces.
-     */
+    /*─────────────────────────────────────────────────────
+     *  File‑system helpers (blocking, called on elastic)
+     *────────────────────────────────────────────────────*/
     private static void tryDeleteQuietly(Path dir) {
-        try {
-            deleteRecursively(dir);
-        } catch (IOException ignored) {
-        }
+        if (dir == null) return;
+        try (var paths = Files.walk(dir)) {             // ⚡ auto‑close the stream
+            paths.sorted(Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (Exception ignored) {
+                        }
+                    });
+        } catch (Exception ignored) {
+        }                 // swallow all—no traces!
     }
 
+    /*─────────────────────────────────────────────────────
+     *  ApplicationRunner – called at context refresh
+     *────────────────────────────────────────────────────*/
     @Override
-    @Transactional
-    public void run(String... args) {
-        Role userRole = roleRepository.findByNameIgnoreCase(userRolesName).orElseThrow(() -> new IllegalStateException("User role not found. Please run the general seeder first."));
+    public void run(ApplicationArguments args) {
+        log.info("DevSeeder: Starting…");
 
-        for (int i = 0; i < testUserCount; i++) {
-            String username = testUserUsername + "_" + (i + 1);
-            if (userRepository.findByUsernameIgnoreCase(username).isPresent()) {
-                continue; // Skip if the User already exists
-            }
-            userRepository.save(User.ofPlainPassword(username, testUserPassword, Set.of(userRole)));
-        }
+        seedUsers()
+                .then(cleanOrphanBots())
+                .subscribeOn(Schedulers.boundedElastic())   // ⬅️ hop once
+                .doOnSuccess(v -> log.info("DevSeeder: Completed successfully"))
+                .doOnError(err -> log.error("DevSeeder: Error during seeding", err))
+                .subscribe();
+    }
 
-        /* at startup check the Bots table, and check if that folder still exists, if not, delete the Bot from the DB */
-        /* Check if the general folder exists of the bot, and then if source and compiled exists */
-        for (Bot bot : botRepo.findAll()) {
-            try {
-                Path sourceFile = Path.of(bot.getSourcePath());
-                Path wasmFile = Path.of(bot.getWasmPath());
 
-                Path botDir = sourceFile.getParent().getParent(); // root/<botName>/
-                Path sourceDir = sourceFile.getParent();
-                Path compiledDir = wasmFile.getParent();
+    /*─────────────────────────────────────────────────────
+     *  1: Create dev users if missing
+     *────────────────────────────────────────────────────*/
+    private Mono<Void> seedUsers() {
 
-                boolean sourceOk = Files.isDirectory(sourceDir) && Files.exists(sourceFile);
-                boolean compiledOk = Files.isDirectory(compiledDir) && Files.exists(wasmFile);
-                boolean rootOk = Files.isDirectory(botDir);
+        Mono<Role> userRole = roleRepo.findByNameIgnoreCase(userRoleName)
+                .switchIfEmpty(Mono.error(new IllegalStateException(
+                        "User role not found—run general seeder first")));
 
-                if (!(rootOk && sourceOk && compiledOk)) {
-                    // 1) Remove DB entry (same as before)
-                    botRepo.delete(bot);
+        return userRole.flatMapMany(role -> Flux.range(0, userCount)
+                        .map(i -> "%s_%d".formatted(baseUser, i + 1))
+                        .flatMap(username ->
+                                userRepo.findByUsernameIgnoreCase(username)
+                                        .switchIfEmpty(Mono.defer(() -> userRepo.save(
+                                                User.ofPlainPassword(username, pw, Set.of(role)))))
+                        ))
+                .then();
+    }
 
-                    // 2) Attempt to wipe the entire bot folder tree
-                    deleteRecursively(botDir);
+    /*─────────────────────────────────────────────────────
+     *  2: Verify bot folders, purge orphans
+     *────────────────────────────────────────────────────*/
+    private Mono<Void> cleanOrphanBots() {
 
-                    System.out.println("DevSeeder: Deleted bot " + bot.getName() + " due to missing files.");
-                }
-            } catch (Exception e) {              // any error?  Purge it all!
-                botRepo.delete(bot);
-                tryDeleteQuietly(Path.of(bot.getSourcePath()).getParent().getParent());
+        return botRepo.findAll()
+                .flatMap(this::validateOrDeleteBot)   // per‑bot validation
+                .then();
+    }
 
-                System.out.println("DevSeeder: Error while checking bot " + bot.getName() + ", deleted it: " + e.getMessage());
-            }
-        }
+    /* validate one bot, maybe delete */
+    private Mono<Void> validateOrDeleteBot(Bot bot) {
+
+        return Mono.fromCallable(() -> isBotFolderIntact(bot))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(intact -> intact ? Mono.empty() : purgeBot(bot))
+                .onErrorResume(err -> purgeBot(bot)
+                        .doOnSuccess(v ->
+                                log.warn("DevSeeder: Error checking bot {}, purged: {}",
+                                        bot.getName(), err.toString())));
+    }
+
+    /* blocking file‑system scan */
+    private boolean isBotFolderIntact(Bot bot) {
+
+        Path source = Path.of(bot.getSourcePath());
+        Path wasm = Path.of(bot.getWasmPath());
+
+        Path root = source.getParent().getParent();
+        Path sourceDir = source.getParent();
+        Path compiledDir = wasm.getParent();
+
+        return Files.isDirectory(root) &&
+                Files.isDirectory(sourceDir) && Files.exists(source) &&
+                Files.isDirectory(compiledDir) && Files.exists(wasm);
+    }
+
+    /* delete bot DB row + wipe folder */
+    private Mono<Void> purgeBot(Bot bot) {
+
+        return botRepo.delete(bot)
+                .then(Mono.fromRunnable(() ->
+                                tryDeleteQuietly(Path.of(bot.getSourcePath()).getParent().getParent()))
+                        .subscribeOn(Schedulers.boundedElastic()))
+                .doOnSuccess(v ->
+                        log.info("DevSeeder: Deleted bot {} (id={}) due to missing files",
+                                bot.getName(), bot.getId()))
+                .onErrorResume(err -> {
+                    log.warn("DevSeeder: Failed to purge bot {}: {}", bot.getName(), err.toString());
+                    return Mono.empty();
+                }).then();
     }
 }

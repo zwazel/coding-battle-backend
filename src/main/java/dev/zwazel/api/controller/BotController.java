@@ -11,54 +11,53 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Mono;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.UUID;
 
-@RequiredArgsConstructor
 @RestController
 @RequestMapping("/bots")
-class BotController {
+@RequiredArgsConstructor
+public class BotController {
+
     private final BotService botService;
 
+    /*─────────────────────────────────────────────────────
+     *  POST /bots  – create bot
+     *────────────────────────────────────────────────────*/
     @PostMapping
-    public ResponseEntity<BotService.CreateBotResponse> createBot(
+    public Mono<ResponseEntity<BotService.CreateBotResponse>> createBot(
             @RequestParam @NonNull String botName,
             @RequestParam @NonNull Language language,
             @RequestPart @NonNull MultipartFile sourceFile,
-            @AuthenticationPrincipal CustomUserPrincipal loggedInUser
-    ) throws IOException {
-        return botService.createBot(botName, language, sourceFile, loggedInUser.getId());
+            @AuthenticationPrincipal CustomUserPrincipal user) {
+
+        return botService.createBot(botName, language, sourceFile, user.getId());
     }
 
-    /**
-     * Updates the source code of an existing bot and recompiles it.
-     *
-     * @param botId        The ID of the bot to update.
-     * @param sourceFile   The new source file to upload.
-     * @param loggedInUser The currently authenticated user. Automatically injected by Spring Security.
-     * @return A ResponseEntity containing the CompileResultDTO with the compilation result.
-     * @throws IOException If an error occurs while reading the source file or during compilation.
-     */
+    /*─────────────────────────────────────────────────────
+     *  PUT /bots/{id}/source  – update & recompile
+     *────────────────────────────────────────────────────*/
     @PutMapping("/{botId}/source")
-    public ResponseEntity<CompileResultDTO> updateBotSource(
+    public Mono<ResponseEntity<CompileResultDTO>> updateBotSource(
             @PathVariable @NonNull UUID botId,
             @RequestPart @NonNull MultipartFile sourceFile,
-            @AuthenticationPrincipal CustomUserPrincipal loggedInUser
-    ) throws IOException {
-        return botService.updateBotSource(botId, sourceFile, loggedInUser.getId());
+            @AuthenticationPrincipal CustomUserPrincipal user) {
+
+        return botService.updateBotSource(botId, sourceFile, user.getId());
     }
 
+    /*─────────────────────────────────────────────────────
+     *  GET /bots/{id}/source  – download source
+     *────────────────────────────────────────────────────*/
     @GetMapping("/{botId}/source")
-    public ResponseEntity<Resource> getBotSource(
+    public Mono<ResponseEntity<Resource>> getBotSource(
             @PathVariable @NonNull UUID botId,
-            @AuthenticationPrincipal CustomUserPrincipal loggedInUser
-    ) {
-        try {
-            return botService.getBotSource(botId, loggedInUser.getId());
-        } catch (MalformedURLException e) {
-            return ResponseEntity.badRequest().build();
-        }
+            @AuthenticationPrincipal CustomUserPrincipal user) {
+
+        return botService.getBotSource(botId, user.getId())
+                /* translate malformed path into 400 */
+                .onErrorResume(java.net.MalformedURLException.class,
+                        err -> Mono.just(ResponseEntity.badRequest().build()));
     }
 }

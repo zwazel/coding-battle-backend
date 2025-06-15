@@ -4,7 +4,6 @@ import dev.zwazel.api.model.DTO.AllLobbiesDTO;
 import dev.zwazel.api.model.DTO.CreateLobbyRequestDTO;
 import dev.zwazel.model.Lobby;
 import dev.zwazel.model.LobbyEvent;
-import dev.zwazel.repository.UserRepository;
 import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.LobbyService;
 import lombok.RequiredArgsConstructor;
@@ -14,56 +13,56 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
-
-import java.util.List;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 @RestController
 @RequestMapping("/lobbies")
 @Slf4j
 @RequiredArgsConstructor
-class LobbyController {
+public class LobbyController {
 
     private final LobbyService lobbyService;
-    private final UserRepository userRepository;
 
-    /**
-     * Create a new lobby, providing a list of players in the request body.
-     */
+    /*─────────────────────────────────────────────────────
+     *  POST /lobbies  – create lobby
+     *────────────────────────────────────────────────────*/
     @PostMapping
     @PreAuthorize("hasRole('USER')")
-    public Lobby createLobby(@RequestBody CreateLobbyRequestDTO request, @AuthenticationPrincipal CustomUserPrincipal loggedInUser) {
-        return lobbyService.createLobby(request, loggedInUser);
+    public Mono<Lobby> createLobby(@RequestBody CreateLobbyRequestDTO request,
+                                   @AuthenticationPrincipal CustomUserPrincipal user) {
+        return lobbyService.createLobby(request, user);
     }
 
-    /**
-     * Get info about a specific lobby (players, etc.).
-     */
+    /*─────────────────────────────────────────────────────
+     *  GET /lobbies/{id}  – retrieve one
+     *────────────────────────────────────────────────────*/
     @GetMapping("/{lobbyId}")
-    public Lobby getLobby(@PathVariable String lobbyId) {
-        Lobby lobby = lobbyService.getLobby(lobbyId);
-        if (lobby == null) {
-            throw new IllegalArgumentException("Lobby not found: " + lobbyId);
-        }
-        return lobby;
+    public Mono<Lobby> getLobby(@PathVariable String lobbyId) {
+        return lobbyService.getLobby(lobbyId)
+                .switchIfEmpty(Mono.error(
+                        new IllegalArgumentException("Lobby not found: " + lobbyId)));
     }
 
-    /**
-     * (Optional) List all lobbies
-     */
+    /*─────────────────────────────────────────────────────
+     *  GET /lobbies  – list all (DTO)
+     *────────────────────────────────────────────────────*/
     @GetMapping
-    public List<AllLobbiesDTO> getAllLobbies() {
-        return AllLobbiesDTO.from(lobbyService.getAllLobbies());
+    public Flux<AllLobbiesDTO> getAllLobbies() {
+        return lobbyService.getAllLobbies()
+                .map(AllLobbiesDTO::from);
     }
 
-    /**
-     * SSE endpoint that merges both "lobby" + "simulation" events.
-     */
-    @GetMapping(value = "/{lobbyId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    /*─────────────────────────────────────────────────────
+     *  SSE: /lobbies/{id}/events  – lobby+simulation stream
+     *────────────────────────────────────────────────────*/
+    @GetMapping(value = "/{lobbyId}/events",
+                produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<LobbyEvent> subscribeToLobbyEvents(@PathVariable String lobbyId) {
-        var sink = lobbyService.getSink(lobbyId);
-        if (sink == null) {
-            return Flux.error(new IllegalArgumentException("Lobby not found: " + lobbyId));
-        }
-        return sink.asFlux();
+
+        return lobbyService.getSink(lobbyId)
+                .switchIfEmpty(Mono.error(
+                        new IllegalArgumentException("Lobby not found: " + lobbyId)))
+                .flatMapMany(Sinks.Many::asFlux);
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.scheduler.Schedulers;
 
 @RestController
 @RequestMapping("/simulation")
@@ -20,6 +21,8 @@ class SimulationController {
      */
     @PostMapping("/{lobbyId}/start")
     public void startSimulation(@PathVariable String lobbyId) {
-        simulationService.startSimulation(lobbyId);
+        simulationService.startSimulation(lobbyId)
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
     }
 }
