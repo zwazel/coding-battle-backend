@@ -38,7 +38,10 @@ class JwtAuthenticationManager implements ReactiveAuthenticationManager {
                 .map(u -> (Authentication) new UsernamePasswordAuthenticationToken(
                         u, token, u.getAuthorities()))
                 .doOnNext(a -> log.info("Authenticated user: {}", a.getName()))
-                .doOnError(e -> log.error("Authentication failed", e))
-                .switchIfEmpty(Mono.error(new BadCredentialsException("Invalid token: " + token)));
+                .switchIfEmpty(Mono.error(new BadCredentialsException("Invalid token: " + token)))
+                .onErrorResume(e -> {;
+                    log.error("Authentication error: {}", e.getMessage());
+                    return Mono.empty();  // return empty on bad credentials
+                });
     }
 }
