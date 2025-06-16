@@ -46,6 +46,9 @@ public class BotService {
             @NonNull MultipartFile sourceFile,
             @NonNull UUID userId) {
 
+        log.info("Creating bot: name={}, language={}, userId={}",
+                botName, language, userId);
+
         botName = botName.trim();
         if (botName.isBlank()) {
             return Mono.just(ResponseEntity.badRequest().build());
@@ -74,7 +77,6 @@ public class BotService {
                 .flatMap(owner ->
                         Mono.fromCallable(() ->
                                         storageService.saveSource(userId, sanitized, language, sourceFile))
-                                .subscribeOn(Schedulers.boundedElastic())
                                 .map(path -> new BotCreateCtx(owner, path)))
                 /* 3️⃣  Compile (CPU/IO heavy) */
                 .flatMap(ctx ->

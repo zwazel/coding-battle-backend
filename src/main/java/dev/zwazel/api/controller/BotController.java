@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 
+import java.net.MalformedURLException;
 import java.util.UUID;
 
 @RestController
@@ -36,7 +37,11 @@ public class BotController {
         log.info("Creating bot: name={}, language={}, user={}, userId={}",
                 botName, language, user.getUsername(), user.getId());
 
-        return botService.createBot(botName, language, sourceFile, user.getId());
+        return botService.createBot(botName, language, sourceFile, user.getId())
+                .doOnSuccess(response -> log.info("Bot created: {}", response.getBody() != null ? response.getBody().id() : "NOTHING CREATED"))
+                .doOnError(err -> log.error("Failed to create bot", err))
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Failed to create bot: " + botName)))
+                ;
     }
 
     /*─────────────────────────────────────────────────────
@@ -61,7 +66,7 @@ public class BotController {
 
         return botService.getBotSource(botId, user.getId())
                 /* translate malformed path into 400 */
-                .onErrorResume(java.net.MalformedURLException.class,
+                .onErrorResume(MalformedURLException.class,
                         err -> Mono.just(ResponseEntity.badRequest().build()));
     }
 }

@@ -1,6 +1,7 @@
 package dev.zwazel.security;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,6 +13,7 @@ import reactor.core.publisher.Mono;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 class JwtServerAuthenticationConverter implements ServerAuthenticationConverter {
 
     private static final String BEARER = "Bearer ";
@@ -20,6 +22,8 @@ class JwtServerAuthenticationConverter implements ServerAuthenticationConverter 
     @Override
     public Mono<Authentication> convert(ServerWebExchange exchange) {
         String token = resolve(exchange);
+        log.info("Converting token: {}", token);
+
         return token == null
                 ? Mono.empty()
                 : Mono.just(new UsernamePasswordAuthenticationToken(token, token));
