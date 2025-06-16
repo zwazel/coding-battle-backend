@@ -27,8 +27,8 @@ import java.util.stream.IntStream;
 
 @Component
 @Profile("dev")
-@DependsOn("generalSeeder")
-@Order(2)
+@DependsOn("generalSeeder")     // wait until GeneralSeeder completed
+@Order(2)                       // runs after GeneralSeeder (@Order 1)
 @RequiredArgsConstructor
 @Slf4j
 public class DevSeeder implements ApplicationRunner {
@@ -39,16 +39,19 @@ public class DevSeeder implements ApplicationRunner {
 
     @Value("${roles.user}")
     private String userRoleName;
+
     @Value("${dev.user.password}")
     private String pw;
+
     @Value("${dev.user.username}")
     private String baseUser;
+
     @Value("${dev.user.count}")
     private int userCount;
 
-    /*─────────────────────────────
+    /*───────────────────────────────────────────────────
      *  Helper – silent folder delete
-     *────────────────────────────*/
+     *──────────────────────────────────────────────────*/
     private static void tryDeleteQuietly(Path dir) {
         if (dir == null) return;
         try (var paths = Files.walk(dir)) {
@@ -63,24 +66,27 @@ public class DevSeeder implements ApplicationRunner {
         }
     }
 
-    /*─────────────────────────────
+    /*───────────────────────────────────────────────────
      *  ApplicationRunner
-     *────────────────────────────*/
+     *──────────────────────────────────────────────────*/
     @Override
     public void run(ApplicationArguments args) {
         log.info("DevSeeder: Starting…");
 
-        seedUsers()
-                .then(cleanOrphanBots())
-                .subscribeOn(Schedulers.boundedElastic())      // all blocking work off event loop
-                .doOnSuccess(v -> log.info("DevSeeder: Completed successfully"))
-                .doOnError(err -> log.error("DevSeeder: Error during seeding", err))
-                .subscribe();
+        Mono<Void> pipeline =
+                seedUsers()
+                        .then(cleanOrphanBots())
+                        .doOnSuccess(v -> log.info("DevSeeder: Completed successfully"))
+                        .doOnError(err -> log.error("DevSeeder: Error during seeding", err))
+                        .subscribeOn(Schedulers.boundedElastic());
+
+        /* Block so Spring proceeds only after dev seeding is done */
+        pipeline.block();
     }
 
-    /*─────────────────────────────
-     *  1️⃣  Create dev users
-     *────────────────────────────*/
+    /*───────────────────────────────────────────────────
+     *  1️⃣  Create dev users if missing
+     *──────────────────────────────────────────────────*/
     private Mono<Void> seedUsers() {
         return Mono.fromCallable(() -> {
                     Role role = roleRepo.findByNameIgnoreCase(userRoleName)
@@ -101,9 +107,9 @@ public class DevSeeder implements ApplicationRunner {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    /*─────────────────────────────
-     *  2️⃣  Purge orphan bots
-     *────────────────────────────*/
+    /*───────────────────────────────────────────────────
+     *  2️⃣  Verify bot folders, purge orphans
+     *──────────────────────────────────────────────────*/
     private Mono<Void> cleanOrphanBots() {
         return Mono.fromCallable(botRepo::findAll)
                 .subscribeOn(Schedulers.boundedElastic())
@@ -130,16 +136,17 @@ public class DevSeeder implements ApplicationRunner {
         Path sourceDir = source.getParent();
         Path compiledDir = wasm.getParent();
 
-        return Files.isDirectory(root) &&
-                Files.isDirectory(sourceDir) && Files.exists(source) &&
-                Files.isDirectory(compiledDir) && Files.exists(wasm);
+        return Files.isDirectory(root)
+                && Files.isDirectory(sourceDir) && Files.exists(source)
+                && Files.isDirectory(compiledDir) && Files.exists(wasm);
     }
 
     private Mono<Void> purgeBot(Bot bot) {
         return Mono.fromRunnable(() -> botRepo.delete(bot))
                 .subscribeOn(Schedulers.boundedElastic())
                 .then(Mono.fromRunnable(() ->
-                                tryDeleteQuietly(Path.of(bot.getSourcePath()).getParent().getParent()))
+                                tryDeleteQuietly(Path.of(bot.getSourcePath())
+                                        .getParent().getParent()))
                         .subscribeOn(Schedulers.boundedElastic()))
                 .doOnSuccess(v ->
                         log.info("DevSeeder: Deleted bot {} (id={}) due to missing files",

@@ -19,9 +19,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 
-@Component
+@Component("generalSeeder")
 @DependsOnDatabaseInitialization
-@Order(1)
+@Order(1)                                     // run before DevSeeder (@Order 2)
 @RequiredArgsConstructor
 @Slf4j
 public class GeneralSeeder implements ApplicationRunner {
@@ -31,68 +31,82 @@ public class GeneralSeeder implements ApplicationRunner {
 
     @Value("${admin.username}")
     private String adminUsername;
+
     @Value("${admin.password}")
     private String adminPassword;
+
     @Value("${roles.admin}")
     private String adminRoleName;
+
     @Value("${roles.user}")
     private String userRoleName;
 
-    /*─────────────────────────────
-     *  ApplicationRunner
-     *────────────────────────────*/
+    /*─────────────────────────────────────
+     *  ApplicationRunner entry‑point
+     *────────────────────────────────────*/
     @Override
     public void run(ApplicationArguments args) {
 
         log.info("GeneralSeeder: Bootstrapping roles & admin user…");
 
-        /* 1️⃣  Ensure ./artifacts directory exists (disk IO) */
-        Mono<Void> ensureArtifactsDir =
-                Mono.fromCallable(() -> {
-                            Files.createDirectories(Path.of("artifacts"));
-                            return (Void) null;
-                        })
+        Mono<Void> pipeline =
+                ensureArtifactsDir()
+                        .then(ensureRolesAndAdminUser())
+                        .doOnSuccess(v -> log.info("GeneralSeeder: Completed successfully"))
+                        .doOnError(err -> log.error("GeneralSeeder: Seeding failed", err))
                         .subscribeOn(Schedulers.boundedElastic());
 
-        /* 2️⃣  Ensure roles exist (blocking JPA) */
+        /*  🔑  BLOCK so DevSeeder waits until this finishes */
+        pipeline.block();
+    }
+
+    /*─────────────────────────────────────
+     *  Ensure ./artifacts directory exists
+     *────────────────────────────────────*/
+    private Mono<Void> ensureArtifactsDir() {
+        return Mono.fromCallable(() -> {
+                    Files.createDirectories(Path.of("artifacts"));
+                    return (Void) null;
+                })
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /*─────────────────────────────────────
+     *  Ensure roles exist and admin user exists
+     *────────────────────────────────────*/
+    private Mono<Void> ensureRolesAndAdminUser() {
+
+        /* blocking role handling */
         Mono<Role> adminRoleMono =
                 Mono.fromCallable(() ->
                                 roleRepo.findByNameIgnoreCase(adminRoleName)
-                                        .orElseGet(() -> roleRepo.save(Role.builder()
-                                                .name(adminRoleName).build())))
+                                        .orElseGet(() ->
+                                                roleRepo.save(Role.builder().name(adminRoleName).build())))
                         .subscribeOn(Schedulers.boundedElastic());
 
         Mono<Role> userRoleMono =
                 Mono.fromCallable(() ->
                                 roleRepo.findByNameIgnoreCase(userRoleName)
-                                        .orElseGet(() -> roleRepo.save(Role.builder()
-                                                .name(userRoleName).build())))
+                                        .orElseGet(() ->
+                                                roleRepo.save(Role.builder().name(userRoleName).build())))
                         .subscribeOn(Schedulers.boundedElastic());
 
-        /* 3️⃣  Ensure admin user exists (blocking JPA) */
-        Mono<Void> ensureAdminUser =
-                Mono.zip(adminRoleMono, userRoleMono)
-                        .flatMap(tuple -> Mono.fromCallable(() -> {
-                                    Role adminRole = tuple.getT1();
-                                    Role userRole = tuple.getT2();
+        /* create admin user if missing */
+        return Mono.zip(adminRoleMono, userRoleMono)
+                .flatMap(tuple -> Mono.fromCallable(() -> {
+                            Role adminRole = tuple.getT1();
+                            Role userRole = tuple.getT2();
 
-                                    userRepo.findByUsernameIgnoreCase(adminUsername)
-                                            .or(() -> {
-                                                userRepo.save(User.ofPlainPassword(
-                                                        adminUsername,
-                                                        adminPassword,
-                                                        Set.of(adminRole, userRole)));
-                                                return java.util.Optional.empty();
-                                            });
-                                    return (Void) null;
-                                })
-                                .subscribeOn(Schedulers.boundedElastic()));
-
-        /* 4️⃣  Chain everything and run off the event loop */
-        ensureArtifactsDir
-                .then(ensureAdminUser)
-                .doOnSuccess(v -> log.info("GeneralSeeder: Completed successfully"))
-                .doOnError(err -> log.error("GeneralSeeder: Seeding failed", err))
-                .subscribe();           // fire‑and‑forget
+                            userRepo.findByUsernameIgnoreCase(adminUsername)
+                                    .or(() -> {
+                                        userRepo.save(User.ofPlainPassword(
+                                                adminUsername,
+                                                adminPassword,
+                                                Set.of(adminRole, userRole)));
+                                        return java.util.Optional.empty();
+                                    });
+                            return (Void) null;
+                        })
+                        .subscribeOn(Schedulers.boundedElastic()));
     }
 }
