@@ -1,7 +1,9 @@
 package dev.zwazel.security;
 
+import io.jsonwebtoken.MalformedJwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,6 +15,7 @@ import reactor.core.publisher.Mono;
 @Controller
 @RequiredArgsConstructor
 @Slf4j
+@Primary
 class JwtAuthenticationManager implements ReactiveAuthenticationManager {
 
     private final JwtService jwt;
@@ -39,9 +42,9 @@ class JwtAuthenticationManager implements ReactiveAuthenticationManager {
                         u, token, u.getAuthorities()))
                 .doOnNext(a -> log.info("Authenticated user: {}", a.getName()))
                 .switchIfEmpty(Mono.error(new BadCredentialsException("Invalid token: " + token)))
-                .onErrorResume(e -> {;
-                    log.error("Authentication error: {}", e.getMessage());
-                    return Mono.empty();  // return empty on bad credentials
+                .onErrorResume(e -> {
+                    log.error("Authentication failed for token: {}", token, e);
+                    return Mono.empty();
                 });
     }
 }

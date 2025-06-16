@@ -17,7 +17,6 @@ import reactor.core.publisher.Mono;
 class JwtServerAuthenticationConverter implements ServerAuthenticationConverter {
 
     private static final String BEARER = "Bearer ";
-    private final JwtService jwt;
 
     @Override
     public Mono<Authentication> convert(ServerWebExchange exchange) {

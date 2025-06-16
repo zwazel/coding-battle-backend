@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
-import org.springframework.security.authentication.DelegatingReactiveAuthenticationManager;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -23,7 +22,6 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -110,16 +108,13 @@ class SecurityConfig {
 
     // expose AuthenticationManager that AuthController uses
     @Bean
-    @Primary
-    ReactiveAuthenticationManager authenticationManager(JwtAuthenticationManager jwtAuth,
-                                                        UserDetailsService uds,
-                                                        PasswordEncoder encoder) {
-
+    ReactiveAuthenticationManager passwordAuthenticationManager(UserDetailsService uds,
+                                                                PasswordEncoder encoder) {
         UserDetailsRepositoryReactiveAuthenticationManager pwd =
                 new UserDetailsRepositoryReactiveAuthenticationManager(uds);
         pwd.setPasswordEncoder(encoder);
 
-        return new DelegatingReactiveAuthenticationManager(List.of(jwtAuth, pwd));
+        return pwd;
     }
 
     @Bean

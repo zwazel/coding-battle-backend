@@ -4,6 +4,7 @@ import dev.zwazel.api.hal.model.LoginResponseModel;
 import dev.zwazel.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.hateoas.Link;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +29,7 @@ import java.time.Duration;
 @Slf4j
 public class AuthController {
 
+    @Qualifier("passwordAuthenticationManager")
     private final ReactiveAuthenticationManager authManager;
     private final JwtService jwt;
     private final UserService userService;
