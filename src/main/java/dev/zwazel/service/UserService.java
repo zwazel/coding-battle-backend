@@ -1,5 +1,6 @@
 package dev.zwazel.service;
 
+import dev.zwazel.domain.Role;
 import dev.zwazel.domain.User;
 import dev.zwazel.repository.RoleRepository;
 import dev.zwazel.repository.UserRepository;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Set;
 
@@ -23,23 +25,22 @@ public class UserService {
     private String userRoleName;
 
     public Mono<User> register(AuthController.LoginRegisterRequest req) {
-        return userRepository                // 1) does that username exist?
-            .existsByUsernameIgnoreCase(req.username())
-            .flatMap(exists -> {
-                if (exists) {
-                    // squeal early—reactively!
-                    return Mono.error(new IllegalArgumentException("Username already exists"));
-                }
+        return Mono.fromCallable(() ->
+                {
+                    // Blocking
+                    if (userRepository.existsByUsernameIgnoreCase(req.username())) {
+                        throw new IllegalArgumentException("Username already exists");
+                    }
 
-                // 2) fetch role… reactively
-                return roleRepository.findByNameIgnoreCase(userRoleName)
-                    .switchIfEmpty(Mono.error(
-                        new IllegalStateException("User role not found")))
-                    // 3) build entity
-                    .map(role -> User.ofPlainPassword(
-                            req.username(), req.password(), Set.of(role)))
-                    // 4) save, still non‑blocking
-                    .flatMap(userRepository::save);
-            });
+                    // Blocking
+                    Role role = roleRepository.findByNameIgnoreCase(userRoleName)
+                            .orElseThrow(() -> new IllegalStateException("User role not found"));
+
+                    User newUser = User.ofPlainPassword(req.username(), req.password(), Set.of(role));
+
+                    // Blocking
+                    return userRepository.save(newUser);
+                }
+        ).subscribeOn(Schedulers.boundedElastic()); // shift to thread pool for blocking calls!;
     }
 }

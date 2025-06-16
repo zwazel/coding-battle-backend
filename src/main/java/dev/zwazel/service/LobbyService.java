@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ public class LobbyService {
 
         final String key = (req.lobbyname() == null) ? "" : req.lobbyname().toLowerCase();
 
-        /* Stage 1 – cheap in‑memory validations */
+        /* Stage 1 – cheap in‑memory validations (still purely reactive) */
         Mono<CreateLobbyRequestDTO> validated = Mono.defer(() -> {
             if (key.isBlank())
                 return Mono.error(new IllegalArgumentException("Lobby name cannot be empty"));
@@ -54,48 +55,50 @@ public class LobbyService {
                         "Max players must be between %d and %d".formatted(minPlayers, maxPlayers)));
             if (lobbies.containsKey(key))
                 return Mono.error(new IllegalArgumentException("Lobby name already exists"));
-            return Mono.just(req);           // pass downstream
+            return Mono.just(req);
         });
 
-        /* Stage 2 – reactive repository checks */
-        return validated
-                .flatMap(r -> userRepository.existsById(loggedInUser.getId())
-                        .filter(Boolean::booleanValue)
-                        .switchIfEmpty(Mono.error(
-                                new EntityNotFoundException("User does not exist")))
-                        .thenReturn(r))
-                .flatMap(r -> {
-                    if (r.selectedBotId() == null) return Mono.just(r);
-                    return botRepository.existsById(r.selectedBotId())
-                            .filter(Boolean::booleanValue)
-                            .switchIfEmpty(Mono.error(
-                                    new EntityNotFoundException("Bot does not exist")))
-                            .thenReturn(r);
-                })
-                /* Stage 3 – build lobby & register in map (synchronous, CPU‑cheap) */
-                .map(r -> {
-                    LobbyUser host = LobbyUser.builder()
-                            .userId(loggedInUser.getId())
-                            .username(loggedInUser.getUsername())
-                            .isHost(true)
-                            .selectedBotId(r.selectedBotId())
-                            .build();
+        /* Stage 2 – blocking repository checks wrapped in boundedElastic */
+        Mono<CreateLobbyRequestDTO> checked = validated.flatMap(r ->
+                Mono.fromCallable(() -> {
+                            /* user must exist */
+                            if (!userRepository.existsById(loggedInUser.getId()))
+                                throw new EntityNotFoundException("User does not exist");
 
-                    Lobby lobby = Lobby.builder()
-                            .name(r.lobbyname())
-                            .maxPlayers(r.maxPlayers())
-                            .players(List.of(host))
-                            .spectatorsAllowed(r.spectatorsAllowed())
-                            .build();
+                            /* if a bot is selected, it must exist */
+                            if (r.selectedBotId() != null &&
+                                    !botRepository.existsById(r.selectedBotId()))
+                                throw new EntityNotFoundException("Bot does not exist");
 
-                    Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
-                    sink.tryEmitNext(new LobbyEvent(
-                            LobbyEventType.WAITING,
-                            "Lobby created, waiting for simulation to start"));
+                            return r;   // pass downstream if all good
+                        })
+                        .subscribeOn(Schedulers.boundedElastic())
+        );
 
-                    lobbies.put(key, new LobbyData(lobby, sink));
-                    return lobby;
-                });
+        /* Stage 3 – build lobby & register (CPU‑cheap, stays on same thread) */
+        return checked.map(r -> {
+            LobbyUser host = LobbyUser.builder()
+                    .userId(loggedInUser.getId())
+                    .username(loggedInUser.getUsername())
+                    .isHost(true)
+                    .selectedBotId(r.selectedBotId())
+                    .build();
+
+            Lobby lobby = Lobby.builder()
+                    .name(r.lobbyname())
+                    .maxPlayers(r.maxPlayers())
+                    .players(List.of(host))
+                    .spectatorsAllowed(r.spectatorsAllowed())
+                    .build();
+
+            Sinks.Many<LobbyEvent> sink = Sinks.many().replay().latest();
+            sink.tryEmitNext(new LobbyEvent(
+                    LobbyEventType.WAITING,
+                    "Lobby created, waiting for simulation to start"));
+
+            lobbies.put(key, new LobbyData(lobby, sink));
+            return lobby;
+        });
     }
 
     /*─────────────────────────────────────────────────────

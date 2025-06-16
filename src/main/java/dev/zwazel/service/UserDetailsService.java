@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @Service
 @Slf4j
@@ -21,17 +22,15 @@ public class UserDetailsService implements ReactiveUserDetailsService {
 
     @Override
     public Mono<UserDetails> findByUsername(String username) {
-
-        /* Query repo → map to principal → propagate error if absent */
-        return userRepo.findByUsernameIgnoreCase(username)
-                .switchIfEmpty(Mono.error(
-                        new UsernameNotFoundException("User not found: " + username)))
-                .map(this::toPrincipal);
+        return Mono.fromCallable(() ->
+                        userRepo.findByUsernameIgnoreCase(username)
+                                .orElseThrow(() ->
+                                        new UsernameNotFoundException("User not found: " + username))
+                )
+                .map(u -> (UserDetails) toPrincipal(u))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
-    /*─────────────────────────────────────────────────────
-     *  Entity → Security principal
-     *────────────────────────────────────────────────────*/
     private CustomUserPrincipal toPrincipal(User u) {
         return new CustomUserPrincipal(
                 u.getId(),

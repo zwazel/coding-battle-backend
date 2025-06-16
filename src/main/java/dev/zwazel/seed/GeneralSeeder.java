@@ -21,7 +21,7 @@ import java.util.Set;
 
 @Component
 @DependsOnDatabaseInitialization
-@Order(1)                       // same priority as before
+@Order(1)
 @RequiredArgsConstructor
 @Slf4j
 public class GeneralSeeder implements ApplicationRunner {
@@ -38,47 +38,61 @@ public class GeneralSeeder implements ApplicationRunner {
     @Value("${roles.user}")
     private String userRoleName;
 
-    /*─────────────────────────────────────────────────────
-     *  ApplicationRunner – kicked at context refresh
-     *────────────────────────────────────────────────────*/
+    /*─────────────────────────────
+     *  ApplicationRunner
+     *────────────────────────────*/
     @Override
     public void run(ApplicationArguments args) {
 
         log.info("GeneralSeeder: Bootstrapping roles & admin user…");
 
-        /* create artifacts/ directory on elastic pool */
+        /* 1️⃣  Ensure ./artifacts directory exists (disk IO) */
         Mono<Void> ensureArtifactsDir =
                 Mono.fromCallable(() -> {
                             Files.createDirectories(Path.of("artifacts"));
-                            return true;                            // dummy value
+                            return (Void) null;
                         })
-                        .subscribeOn(Schedulers.boundedElastic())
-                        .then();                                        // convert to Mono<Void>
+                        .subscribeOn(Schedulers.boundedElastic());
 
-        /* ensure admin & user roles exist */
-        Mono<Role> adminRoleMono = roleRepo.findByNameIgnoreCase(adminRoleName)
-                .switchIfEmpty(roleRepo.save(Role.builder().name(adminRoleName).build()));
+        /* 2️⃣  Ensure roles exist (blocking JPA) */
+        Mono<Role> adminRoleMono =
+                Mono.fromCallable(() ->
+                                roleRepo.findByNameIgnoreCase(adminRoleName)
+                                        .orElseGet(() -> roleRepo.save(Role.builder()
+                                                .name(adminRoleName).build())))
+                        .subscribeOn(Schedulers.boundedElastic());
 
-        Mono<Role> userRoleMono = roleRepo.findByNameIgnoreCase(userRoleName)
-                .switchIfEmpty(roleRepo.save(Role.builder().name(userRoleName).build()));
+        Mono<Role> userRoleMono =
+                Mono.fromCallable(() ->
+                                roleRepo.findByNameIgnoreCase(userRoleName)
+                                        .orElseGet(() -> roleRepo.save(Role.builder()
+                                                .name(userRoleName).build())))
+                        .subscribeOn(Schedulers.boundedElastic());
 
-        /* create admin user if missing */
-        Mono<Void> ensureAdminUser = Mono.zip(adminRoleMono, userRoleMono)
-                .flatMap(tuple -> {
-                    Role adminRole = tuple.getT1();
-                    Role userRole = tuple.getT2();
-                    return userRepo.findByUsernameIgnoreCase(adminUsername)
-                            .switchIfEmpty(userRepo.save(User.ofPlainPassword(
-                                    adminUsername, adminPassword, Set.of(adminRole, userRole))));
-                })
-                .then();
+        /* 3️⃣  Ensure admin user exists (blocking JPA) */
+        Mono<Void> ensureAdminUser =
+                Mono.zip(adminRoleMono, userRoleMono)
+                        .flatMap(tuple -> Mono.fromCallable(() -> {
+                                    Role adminRole = tuple.getT1();
+                                    Role userRole = tuple.getT2();
 
-        /* chain dir‑creation → role seeding → admin user */
+                                    userRepo.findByUsernameIgnoreCase(adminUsername)
+                                            .or(() -> {
+                                                userRepo.save(User.ofPlainPassword(
+                                                        adminUsername,
+                                                        adminPassword,
+                                                        Set.of(adminRole, userRole)));
+                                                return java.util.Optional.empty();
+                                            });
+                                    return (Void) null;
+                                })
+                                .subscribeOn(Schedulers.boundedElastic()));
+
+        /* 4️⃣  Chain everything and run off the event loop */
         ensureArtifactsDir
                 .then(ensureAdminUser)
-                .subscribeOn(Schedulers.boundedElastic())     // run whole chain off main thread
                 .doOnSuccess(v -> log.info("GeneralSeeder: Completed successfully"))
                 .doOnError(err -> log.error("GeneralSeeder: Seeding failed", err))
-                .subscribe();                                 // fire‑and‑forget
+                .subscribe();           // fire‑and‑forget
     }
 }

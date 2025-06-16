@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,7 +38,7 @@ public class BotService {
     private final StorageService storageService;
 
     /*─────────────────────────────────────────────────────
-     *  CREATE BOT (reactive)
+     *  CREATE BOT  – fully reactive façade over blocking JPA
      *────────────────────────────────────────────────────*/
     public Mono<ResponseEntity<CreateBotResponse>> createBot(
             @NonNull String botName,
@@ -44,27 +46,37 @@ public class BotService {
             @NonNull MultipartFile sourceFile,
             @NonNull UUID userId) {
 
-        /* quick non‑blocking checks */
         botName = botName.trim();
         if (botName.isBlank()) {
             return Mono.just(ResponseEntity.badRequest().build());
         }
-        String sanitized = botName.replaceAll("[^a-zA-Z0-9_\\-]", "");
+        final String sanitized = botName.replaceAll("[^a-zA-Z0-9_\\-]", "");
 
-        return userRepository.findById(userId)
-                .switchIfEmpty(Mono.error(new EntityNotFoundException("User not found: " + userId)))
-                .flatMap(user ->
-                        botRepository.existsByNameIgnoreCaseAndOwner(sanitized.toLowerCase(), user)
-                                .flatMap(exists -> exists
-                                        ? Mono.error(new IllegalArgumentException("Bot name already exists for this user"))
-                                        : Mono.just(user)))
-                /* save source on boundedElastic (blocking IO) */
-                .flatMap(user ->
+        /* 1️⃣  Blocking JPA checks ➜ boundedElastic */
+        Mono<User> ownerMono = Mono.fromCallable(() ->
+                        userRepository.findById(userId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                        "User not found: " + userId)))
+                .subscribeOn(Schedulers.boundedElastic());
+
+        return ownerMono.flatMap(owner ->
+                        Mono.fromCallable(() -> {
+                                    boolean exists = botRepository
+                                            .existsByNameIgnoreCaseAndOwner(sanitized.toLowerCase(), owner);
+                                    if (exists) {
+                                        throw new IllegalArgumentException("Bot name already exists for this user");
+                                    }
+                                    return owner;
+                                })
+                                .subscribeOn(Schedulers.boundedElastic())
+                )
+                /* 2️⃣  Save source (disk IO) */
+                .flatMap(owner ->
                         Mono.fromCallable(() ->
                                         storageService.saveSource(userId, sanitized, language, sourceFile))
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .map(path -> new BotCreateCtx(user, path)))
-                /* compile source (CPU/IO heavy) */
+                                .map(path -> new BotCreateCtx(owner, path)))
+                /* 3️⃣  Compile (CPU/IO heavy) */
                 .flatMap(ctx ->
                         Mono.fromCallable(() -> {
                                     Path compiledDir = storageService.compiledDir(userId, sanitized);
@@ -73,11 +85,12 @@ public class BotService {
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .map(res -> new BotCompileCtx(ctx.user, ctx.sourcePath, res)))
-                /* validate compilation + persist bot */
+                /* 4️⃣  Persist bot  */
                 .flatMap(ctx -> {
                     CompileResultDTO res = ctx.result;
                     if (Objects.requireNonNull(res.status()) == HttpStatus.BAD_REQUEST) {
-                        return Mono.error(new IllegalArgumentException("Compilation failed: " + res.buildLog()));
+                        return Mono.error(new IllegalArgumentException(
+                                "Compilation failed: " + res.buildLog()));
                     }
                     Bot toSave = Bot.builder()
                             .name(sanitized)
@@ -86,17 +99,21 @@ public class BotService {
                             .owner(ctx.user)
                             .wasmPath(res.wasmPath())
                             .build();
-                    return botRepository.save(toSave)
-                            .map(saved -> ResponseEntity.ok(new CreateBotResponse(saved.getId(), res)));
+
+                    return Mono.fromCallable(() -> botRepository.save(toSave))
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .map(saved -> ResponseEntity.ok(
+                                    new CreateBotResponse(saved.getId(), res)));
                 })
-                /* map domain errors to proper HTTP codes */
+                /* 5️⃣  Map validation errors → 400 */
                 .onErrorResume(err -> {
                     if (err instanceof IllegalArgumentException) {
                         return Mono.just(ResponseEntity.badRequest().body(
                                 new CreateBotResponse(null,
-                                        new CompileResultDTO(HttpStatus.BAD_REQUEST, err.getMessage(), null, null))));
+                                        new CompileResultDTO(HttpStatus.BAD_REQUEST,
+                                                err.getMessage(), null, null))));
                     }
-                    return Mono.error(err);   // bubble others
+                    return Mono.error(err);
                 });
     }
 
@@ -108,33 +125,44 @@ public class BotService {
             @NonNull MultipartFile sourceFile,
             @NonNull UUID userId) {
 
-        return Mono.zip(botRepository.findById(botId),
-                        userRepository.findById(userId))
-                .switchIfEmpty(Mono.error(new EntityNotFoundException("Bot or User not found")))
-                .flatMap(tuple -> {
-                    Bot bot = tuple.getT1();
-                    User user = tuple.getT2();
-                    if (!bot.getOwner().getId().equals(user.getId())) {
-                        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
-                    }
-                    return Mono.fromCallable(() -> storageService.replaceSource(bot, sourceFile))
-                            .subscribeOn(Schedulers.boundedElastic())
-                            .flatMap(savedPath -> compileAndSave(bot, sourceFile, savedPath));
-                });
+        /* blocking fetch ➜ boundedElastic */
+        Mono<Tuple2<Bot, User>> fetchMono = Mono.fromCallable(() -> Tuples.of(
+                        botRepository.findById(botId)
+                                .orElseThrow(() -> new EntityNotFoundException("Bot not found: " + botId)),
+                        userRepository.findById(userId)
+                                .orElseThrow(() -> new EntityNotFoundException("User not found: " + userId))
+                ))
+                .subscribeOn(Schedulers.boundedElastic());
+
+        return fetchMono.flatMap(tuple -> {
+            Bot bot = tuple.getT1();
+            User usr = tuple.getT2();
+
+            if (!bot.getOwner().getId().equals(usr.getId())) {
+                return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
+            }
+
+            return Mono.fromCallable(() -> storageService.replaceSource(bot, sourceFile))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .flatMap(savedPath -> compileAndSave(bot, sourceFile, savedPath));
+        });
     }
 
+    /*─────────────────────────────────────────────────────
+     *  compileAndSave – unchanged except for blocking save
+     *────────────────────────────────────────────────────*/
     private Mono<ResponseEntity<CompileResultDTO>> compileAndSave(
             Bot bot,
             MultipartFile sourceFile,
             Path savedSourcePath) {
 
         UUID userId = bot.getOwner().getId();
-        String botName = bot.getName();
+        String name = bot.getName();
 
         return Mono.fromCallable(() -> {
-                    Path compiledDir = storageService.compiledDir(userId, botName);
+                    Path compiledDir = storageService.compiledDir(userId, name);
                     Files.createDirectories(compiledDir);
-                    return bot.getLanguage().compile(botName, compiledDir, sourceFile);
+                    return bot.getLanguage().compile(name, compiledDir, sourceFile);
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(res -> {
@@ -143,34 +171,33 @@ public class BotService {
                     }
                     bot.setSourcePath(savedSourcePath.toString());
                     bot.setWasmPath(res.wasmPath());
-                    return botRepository.save(bot)
+
+                    return Mono.fromCallable(() -> botRepository.save(bot))
+                            .subscribeOn(Schedulers.boundedElastic())
                             .thenReturn(ResponseEntity.ok(res));
                 })
                 .onErrorResume(e ->
-                        Mono.just(ResponseEntity.badRequest()
-                                .body(new CompileResultDTO(HttpStatus.BAD_REQUEST,
+                        Mono.just(ResponseEntity.badRequest().body(
+                                new CompileResultDTO(HttpStatus.BAD_REQUEST,
                                         "Compilation failed: " + e.getMessage(), null, null))));
     }
 
     /*─────────────────────────────────────────────────────
-     *  GET BOT SOURCE FILE
+     *  GET BOT SOURCE
      *────────────────────────────────────────────────────*/
     public Mono<ResponseEntity<Resource>> getBotSource(UUID botId, UUID requesterId) {
-        return botRepository.findById(botId)
-                // 404 if bot missing
-                .switchIfEmpty(Mono.error(
-                        new EntityNotFoundException("Bot not found: " + botId)))
-
-                // single flatMap keeps type stable
+        return Mono.fromCallable(() ->
+                        botRepository.findById(botId)
+                                .orElseThrow(() -> new EntityNotFoundException("Bot not found: " + botId)))
+                .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(bot -> {
-                    // 403 if wrong owner
                     if (!bot.getOwner().getId().equals(requesterId)) {
                         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build());
                     }
-                    // happy path
                     return fileResponse(Path.of(bot.getSourcePath()));
                 });
     }
+
 
     private Mono<ResponseEntity<Resource>> fileResponse(Path path) {
         if (!Files.exists(path)) {

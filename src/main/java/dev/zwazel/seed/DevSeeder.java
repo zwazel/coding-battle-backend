@@ -23,11 +23,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 @Component
 @Profile("dev")
 @DependsOn("generalSeeder")
-@Order(2)                          // replaces @Priority for ApplicationRunner
+@Order(2)
 @RequiredArgsConstructor
 @Slf4j
 public class DevSeeder implements ApplicationRunner {
@@ -38,22 +39,19 @@ public class DevSeeder implements ApplicationRunner {
 
     @Value("${roles.user}")
     private String userRoleName;
-
     @Value("${dev.user.password}")
     private String pw;
-
     @Value("${dev.user.username}")
     private String baseUser;
-
     @Value("${dev.user.count}")
     private int userCount;
 
-    /*─────────────────────────────────────────────────────
-     *  File‑system helpers (blocking, called on elastic)
-     *────────────────────────────────────────────────────*/
+    /*─────────────────────────────
+     *  Helper – silent folder delete
+     *────────────────────────────*/
     private static void tryDeleteQuietly(Path dir) {
         if (dir == null) return;
-        try (var paths = Files.walk(dir)) {             // ⚡ auto‑close the stream
+        try (var paths = Files.walk(dir)) {
             paths.sorted(Comparator.reverseOrder())
                     .forEach(p -> {
                         try {
@@ -62,57 +60,59 @@ public class DevSeeder implements ApplicationRunner {
                         }
                     });
         } catch (Exception ignored) {
-        }                 // swallow all—no traces!
+        }
     }
 
-    /*─────────────────────────────────────────────────────
-     *  ApplicationRunner – called at context refresh
-     *────────────────────────────────────────────────────*/
+    /*─────────────────────────────
+     *  ApplicationRunner
+     *────────────────────────────*/
     @Override
     public void run(ApplicationArguments args) {
         log.info("DevSeeder: Starting…");
 
         seedUsers()
                 .then(cleanOrphanBots())
-                .subscribeOn(Schedulers.boundedElastic())   // ⬅️ hop once
+                .subscribeOn(Schedulers.boundedElastic())      // all blocking work off event loop
                 .doOnSuccess(v -> log.info("DevSeeder: Completed successfully"))
                 .doOnError(err -> log.error("DevSeeder: Error during seeding", err))
                 .subscribe();
     }
 
-
-    /*─────────────────────────────────────────────────────
-     *  1: Create dev users if missing
-     *────────────────────────────────────────────────────*/
+    /*─────────────────────────────
+     *  1️⃣  Create dev users
+     *────────────────────────────*/
     private Mono<Void> seedUsers() {
+        return Mono.fromCallable(() -> {
+                    Role role = roleRepo.findByNameIgnoreCase(userRoleName)
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "User role not found—run general seeder first"));
 
-        Mono<Role> userRole = roleRepo.findByNameIgnoreCase(userRoleName)
-                .switchIfEmpty(Mono.error(new IllegalStateException(
-                        "User role not found—run general seeder first")));
-
-        return userRole.flatMapMany(role -> Flux.range(0, userCount)
-                        .map(i -> "%s_%d".formatted(baseUser, i + 1))
-                        .flatMap(username ->
-                                userRepo.findByUsernameIgnoreCase(username)
-                                        .switchIfEmpty(Mono.defer(() -> userRepo.save(
-                                                User.ofPlainPassword(username, pw, Set.of(role)))))
-                        ))
-                .then();
+                    IntStream.range(0, userCount).forEach(i -> {
+                        String username = "%s_%d".formatted(baseUser, i + 1);
+                        userRepo.findByUsernameIgnoreCase(username)
+                                .or(() -> {
+                                    userRepo.save(
+                                            User.ofPlainPassword(username, pw, Set.of(role)));
+                                    return java.util.Optional.empty();
+                                });
+                    });
+                    return (Void) null;
+                })
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
-    /*─────────────────────────────────────────────────────
-     *  2: Verify bot folders, purge orphans
-     *────────────────────────────────────────────────────*/
+    /*─────────────────────────────
+     *  2️⃣  Purge orphan bots
+     *────────────────────────────*/
     private Mono<Void> cleanOrphanBots() {
-
-        return botRepo.findAll()
-                .flatMap(this::validateOrDeleteBot)   // per‑bot validation
+        return Mono.fromCallable(botRepo::findAll)
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapMany(Flux::fromIterable)
+                .flatMap(this::validateOrDeleteBot)
                 .then();
     }
 
-    /* validate one bot, maybe delete */
     private Mono<Void> validateOrDeleteBot(Bot bot) {
-
         return Mono.fromCallable(() -> isBotFolderIntact(bot))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(intact -> intact ? Mono.empty() : purgeBot(bot))
@@ -122,9 +122,7 @@ public class DevSeeder implements ApplicationRunner {
                                         bot.getName(), err.toString())));
     }
 
-    /* blocking file‑system scan */
     private boolean isBotFolderIntact(Bot bot) {
-
         Path source = Path.of(bot.getSourcePath());
         Path wasm = Path.of(bot.getWasmPath());
 
@@ -137,10 +135,9 @@ public class DevSeeder implements ApplicationRunner {
                 Files.isDirectory(compiledDir) && Files.exists(wasm);
     }
 
-    /* delete bot DB row + wipe folder */
     private Mono<Void> purgeBot(Bot bot) {
-
-        return botRepo.delete(bot)
+        return Mono.fromRunnable(() -> botRepo.delete(bot))
+                .subscribeOn(Schedulers.boundedElastic())
                 .then(Mono.fromRunnable(() ->
                                 tryDeleteQuietly(Path.of(bot.getSourcePath()).getParent().getParent()))
                         .subscribeOn(Schedulers.boundedElastic()))
