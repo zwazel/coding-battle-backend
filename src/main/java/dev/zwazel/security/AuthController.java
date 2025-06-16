@@ -21,7 +21,6 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
@@ -126,11 +125,5 @@ public class AuthController {
     public record LoginRegisterRequest(String username,
                                        String password,
                                        Long ttlSeconds) {
-    }
-
-    public record LoginResponse(UUID id,
-                                String tokenType,
-                                String token,
-                                long expiresInSeconds) {
     }
 }
