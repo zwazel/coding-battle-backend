@@ -25,7 +25,7 @@ public class LobbyController {
     private final LobbyService lobbyService;
 
     /*─────────────────────────────────────────────────────
-     *  POST /lobbies  – create lobby
+     *  POST /lobbies  – create lobby
      *────────────────────────────────────────────────────*/
     @PostMapping
     @PreAuthorize("hasRole('USER')")
@@ -35,7 +35,7 @@ public class LobbyController {
     }
 
     /*─────────────────────────────────────────────────────
-     *  GET /lobbies/{id}  – retrieve one
+     *  GET /lobbies/{id}  – retrieve one
      *────────────────────────────────────────────────────*/
     @GetMapping("/{lobbyId}")
     public Mono<Lobby> getLobby(@PathVariable String lobbyId) {

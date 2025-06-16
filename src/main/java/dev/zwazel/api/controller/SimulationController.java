@@ -11,7 +11,7 @@ import reactor.core.scheduler.Schedulers;
 @RestController
 @RequestMapping("/simulation")
 @RequiredArgsConstructor
-class SimulationController {
+public class SimulationController {
 
     private final SimulationService simulationService;
 
