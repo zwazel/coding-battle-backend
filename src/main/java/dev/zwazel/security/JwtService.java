@@ -5,7 +5,6 @@ import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -18,7 +17,7 @@ import java.util.Date;
 class JwtService {
     private final SecretKey key;
 
-    public String generate(UserDetails user, Duration ttl) {
+    public String generate(CustomUserPrincipal user, Duration ttl) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getUsername())
