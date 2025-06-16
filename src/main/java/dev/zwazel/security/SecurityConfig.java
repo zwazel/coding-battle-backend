@@ -1,10 +1,15 @@
 package dev.zwazel.security;
 
+import dev.zwazel.service.UserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
+import org.springframework.security.authentication.DelegatingReactiveAuthenticationManager;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
@@ -18,6 +23,7 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -102,17 +108,19 @@ class SecurityConfig {
         return http.build();
     }
 
-    /*// expose AuthenticationManager that AuthController uses
+    // expose AuthenticationManager that AuthController uses
     @Bean
-    ReactiveAuthenticationManager authManager(UserDetailsService uds,
-                                              PasswordEncoder encoder) {
+    @Primary
+    ReactiveAuthenticationManager authenticationManager(JwtAuthenticationManager jwtAuth,
+                                                        UserDetailsService uds,
+                                                        PasswordEncoder encoder) {
 
-        UserDetailsRepositoryReactiveAuthenticationManager auth =
+        UserDetailsRepositoryReactiveAuthenticationManager pwd =
                 new UserDetailsRepositoryReactiveAuthenticationManager(uds);
+        pwd.setPasswordEncoder(encoder);
 
-        auth.setPasswordEncoder(encoder);
-        return auth;
-    }*/
+        return new DelegatingReactiveAuthenticationManager(List.of(jwtAuth, pwd));
+    }
 
     @Bean
     PasswordEncoder encoder() {

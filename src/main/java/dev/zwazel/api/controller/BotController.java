@@ -6,6 +6,7 @@ import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.BotService;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +19,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/bots")
 @RequiredArgsConstructor
+@Slf4j
 public class BotController {
 
     private final BotService botService;
@@ -31,6 +33,8 @@ public class BotController {
             @RequestParam @NonNull Language language,
             @RequestPart @NonNull MultipartFile sourceFile,
             @AuthenticationPrincipal CustomUserPrincipal user) {
+        log.info("Creating bot: name={}, language={}, user={}, userId={}",
+                botName, language, user.getUsername(), user.getId());
 
         return botService.createBot(botName, language, sourceFile, user.getId());
     }
