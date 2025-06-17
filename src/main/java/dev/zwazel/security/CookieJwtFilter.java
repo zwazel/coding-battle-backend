@@ -24,7 +24,9 @@ class CookieJwtFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange ex, WebFilterChain chain) {
         log.debug("Starting filter for request: {}", ex.getRequest().getURI());
-        return Mono.justOrEmpty(ex.getRequest().getCookies().getFirst(jwtCookieName))
+
+        Mono<org.springframework.security.core.Authentication> authMono = Mono
+                .justOrEmpty(ex.getRequest().getCookies().getFirst(jwtCookieName))
                 .doOnNext(c -> log.debug("JWT cookie found: {}", jwtCookieName))
                 .flatMap(c -> jwtUtil.validate(c.getValue())
                         .doOnSuccess(auth -> log.debug("JWT successfully validated"))
@@ -33,12 +35,15 @@ class CookieJwtFilter implements WebFilter {
                             log.error("JWT validation failed: {}", e.getMessage());
                             return Mono.empty();
                         })
-                )
+                );
+
+        return authMono
                 .flatMap(auth -> {
                     log.debug("Setting authentication in security context");
                     return chain.filter(ex)
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
-                });
+                })
+                .switchIfEmpty(chain.filter(ex));
     }
 
 }
