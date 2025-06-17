@@ -24,20 +24,23 @@ class CookieJwtFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange ex, WebFilterChain chain) {
         log.debug("Starting filter for request: {}", ex.getRequest().getURI());
-        return Mono.justOrEmpty(ex.getRequest().getCookies().getFirst(jwtCookieName))
-                .doOnNext(c -> log.debug("JWT cookie found: {}", jwtCookieName))
-                .flatMap(c -> jwtUtil.validate(c.getValue())
-                        .doOnSuccess(auth -> log.debug("JWT successfully validated"))
-                        .doOnError(e -> log.warn("Error during JWT validation: {}", e.getMessage()))
-                        .onErrorResume(e -> {
-                            log.error("JWT validation failed: {}", e.getMessage());
-                            return Mono.empty();
-                        })
-                )
+
+        var cookie = ex.getRequest().getCookies().getFirst(jwtCookieName);
+        if (cookie == null) {
+            return chain.filter(ex);
+        }
+
+        return jwtUtil.validate(cookie.getValue())
+                .doOnSuccess(auth -> log.debug("JWT successfully validated"))
+                .doOnError(e -> log.warn("Error during JWT validation: {}", e.getMessage()))
                 .flatMap(auth -> {
                     log.debug("Setting authentication in security context");
                     return chain.filter(ex)
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
+                })
+                .onErrorResume(e -> {
+                    log.error("JWT validation failed: {}", e.getMessage());
+                    return chain.filter(ex);
                 });
     }
 
