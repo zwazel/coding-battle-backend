@@ -38,8 +38,7 @@ class CookieJwtFilter implements WebFilter {
                     log.debug("Setting authentication in security context");
                     return chain.filter(ex)
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
-                })
-                .switchIfEmpty(chain.filter(ex));
+                });
     }
 
 }
