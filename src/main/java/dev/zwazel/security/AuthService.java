@@ -4,7 +4,6 @@ import dev.zwazel.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -13,7 +12,7 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class AuthService {
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
     @Value("${jwt.cookie.name}")
