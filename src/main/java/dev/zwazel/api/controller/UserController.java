@@ -26,12 +26,15 @@ public class UserController {
 
     @GetMapping("/{id}")
     public Mono<EntityModel<UserModel>> one(@PathVariable UUID id, ServerWebExchange ex) {
-        return Mono.fromCallable(() ->
-                        userRepository.findById(id)
-                                .orElseThrow(() ->
-                                        new EntityNotFoundException(id.toString())))
-                .subscribeOn(Schedulers.boundedElastic())           // ⬅️ isolate blocking JPA
-                .flatMap(user -> userModelAssembler.toModel(user, ex)) // assembler stays reactive
-                .map(EntityModel::of);
+        return Mono.fromCallable(() -> userRepository.findById(id))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(optionalUser -> optionalUser
+                        .map(user -> userModelAssembler.toModel(user, ex)
+                                .map(EntityModel::of))
+                        .orElseGet(() -> Mono.error(new EntityNotFoundException(id.toString()))))
+                .doOnError(EntityNotFoundException.class, e -> {
+                    // Log the error or handle it as needed
+                    System.err.println("User not found: " + e.getMessage());
+                });
     }
 }

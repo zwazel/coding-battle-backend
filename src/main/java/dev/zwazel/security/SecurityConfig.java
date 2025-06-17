@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
@@ -16,7 +15,6 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -51,13 +49,9 @@ class SecurityConfig {
     @Bean
     SecurityWebFilterChain springSecurityFilterChain(
             ServerHttpSecurity http,
-            JwtAuthenticationManager authMgr,
-            JwtServerAuthenticationConverter conv,
-            CorsConfigurationSource corsConfigurationSource
+            CorsConfigurationSource corsConfigurationSource,
+            CookieJwtFilter f
     ) {
-        AuthenticationWebFilter jwtFilter = new AuthenticationWebFilter(authMgr);
-        jwtFilter.setServerAuthenticationConverter(conv);
-
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
@@ -85,7 +79,7 @@ class SecurityConfig {
                                 "/users/**"
                         ).hasRole(userRoleName)
                 )
-                .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .addFilterAt(f, SecurityWebFiltersOrder.AUTHENTICATION)
         ;
         /*.exceptionHandling(ex -> ex
                         .authenticationEntryPoint(new JwtAuthenticationEntryPoint(env))

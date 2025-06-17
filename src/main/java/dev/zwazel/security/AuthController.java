@@ -33,6 +33,7 @@ public class AuthController {
     private final ReactiveAuthenticationManager authManager;
     private final JwtService jwt;
     private final UserService userService;
+    private final AuthService authService;
 
     @Value("${jwt.defaultExpiration}")
     private long DEFAULT_TTL;
@@ -41,16 +42,20 @@ public class AuthController {
     /*  POST /auth/login                                */
     /*──────────────────────────────────────────────────*/
     @PostMapping("/login")
-    public Mono<ResponseEntity<LoginResponseModel>> login(
-            @RequestBody LoginRegisterRequest req,
-            ServerWebExchange ex) {
+    public Mono<ResponseEntity<Void>> login(
+            @RequestBody LoginRegisterRequest req) {
 
         log.info("LOGIN attempt for {}", req.username());
 
-        return authenticate(req.username(), req.password())
-                .flatMap(p -> buildResponse(p, req.ttlSeconds(), ex))
-                .doOnSuccess(r -> log.info("LOGIN success for {}", req.username()))
-                .doOnError(e -> log.error("LOGIN failed for {}", req.username(), e));
+        Long ttlSeconds = (req.ttlSeconds() == null || req.ttlSeconds() <= 0) ? DEFAULT_TTL : req.ttlSeconds();
+
+        return authService.login(req.username(), req.password(), ttlSeconds)
+                .map(c -> {
+                    log.info("LOGIN success for {}", req.username());
+                    return ResponseEntity.ok()
+                            .header(HttpHeaders.SET_COOKIE, c.toString())
+                            .build();
+                });
     }
 
     /*──────────────────────────────────────────────────*/
