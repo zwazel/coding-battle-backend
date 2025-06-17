@@ -1,13 +1,10 @@
 package dev.zwazel.security;
 
-import dev.zwazel.service.UserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
-import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
@@ -98,17 +95,6 @@ class SecurityConfig {
                 );
 
         return http.build();
-    }
-
-    // expose AuthenticationManager that AuthController uses
-    @Bean
-    ReactiveAuthenticationManager passwordAuthenticationManager(UserDetailsService uds,
-                                                                PasswordEncoder encoder) {
-        UserDetailsRepositoryReactiveAuthenticationManager pwd =
-                new UserDetailsRepositoryReactiveAuthenticationManager(uds);
-        pwd.setPasswordEncoder(encoder);
-
-        return pwd;
     }
 
     @Bean

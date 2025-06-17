@@ -3,9 +3,11 @@ package dev.zwazel.security;
 import dev.zwazel.domain.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -15,6 +17,7 @@ import java.util.Date;
 import java.util.List;
 
 @Component
+@Slf4j
 public class JwtUtil {
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -24,7 +27,9 @@ public class JwtUtil {
         return Mono.fromCallable(() ->
                 Jwts.builder()
                         .subject(u.getUsername())
-                        .claim("roles", u.getRoles())
+                        .claim("roles", u.getRoles().stream()
+                                .map(role -> role.getName().toUpperCase())
+                                .toList())
                         .issuedAt(Date.from(now))
                         .expiration(Date.from(now.plusSeconds(ttlSeconds)))
                         .signWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
@@ -33,17 +38,27 @@ public class JwtUtil {
     }
 
     Mono<Authentication> validate(String token) {
-        return Mono.fromCallable(() -> Jwts.parser()
-                        .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
-                        .build()
-                        .parseSignedClaims(token))
-                .map(c ->
-                        // c is Jws<Claims>
-                        new UsernamePasswordAuthenticationToken(
-                                c.getPayload().getSubject(),
-                                null,
-                                List.copyOf(c.getPayload().get("roles", List.class))
-                        )
-                );
+        log.debug("JWT token validation started");
+        return Mono.fromCallable(() -> {
+                    log.debug("Parsing JWT token");
+                    return Jwts.parser()
+                            .verifyWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))
+                            .build()
+                            .parseSignedClaims(token);
+                })
+                .map(c -> {
+                    log.debug("JWT token parsed successfully, subject: {}", c.getPayload().getSubject());
+                    List<?> roles = c.getPayload().get("roles", List.class);
+                    List<SimpleGrantedAuthority> authorities = roles.stream()
+                            .map(role -> "ROLE_" + role.toString().toUpperCase())
+                            .map(SimpleGrantedAuthority::new)
+                            .toList();
+                    log.debug("Extracted authorities: {}", authorities);
+                    return new UsernamePasswordAuthenticationToken(
+                            c.getPayload().getSubject(),
+                            null,
+                            authorities
+                    );
+                });
     }
 }
