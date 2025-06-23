@@ -3,7 +3,7 @@ package dev.zwazel.service;
 import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.User;
-import dev.zwazel.model.language.Language;
+import dev.zwazel.language.Language;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;

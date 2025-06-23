@@ -1,6 +1,6 @@
 package dev.zwazel.domain;
 
-import dev.zwazel.model.language.Language;
+import dev.zwazel.language.Language;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;

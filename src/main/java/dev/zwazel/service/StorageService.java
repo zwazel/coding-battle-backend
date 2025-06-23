@@ -1,7 +1,7 @@
 package dev.zwazel.service;
 
 import dev.zwazel.domain.Bot;
-import dev.zwazel.model.language.Language;
+import dev.zwazel.language.Language;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
