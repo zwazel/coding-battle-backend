@@ -22,12 +22,19 @@ public class UserService {
     private String userRoleName;
 
     public User register(AuthController.LoginRegisterRequest req) {
+        log.info("Registering user with username: {}", req.username());
         if (userRepository.existsByUsernameIgnoreCase((req.username()))) {
+            log.warn("Username '{}' already exists", req.username());
             throw new IllegalArgumentException("Username already exists");
         }
 
         User user = User.ofPlainPassword(req.username(), req.password(),
-                Set.of(roleRepository.findByNameIgnoreCase(userRoleName).orElseThrow(() -> new IllegalStateException("User role not found"))));
-        return userRepository.save(user);
+                Set.of(roleRepository.findByNameIgnoreCase(userRoleName).orElseThrow(() -> {
+                    log.error("User role not found");
+                    return new IllegalStateException("User role not found");
+                })));
+        User savedUser = userRepository.save(user);
+        log.info("Successfully registered user with username: {}", savedUser.getUsername());
+        return savedUser;
     }
 }

@@ -6,6 +6,7 @@ import dev.zwazel.domain.User;
 import dev.zwazel.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
@@ -24,6 +26,7 @@ public class UserController {
 
     @GetMapping("/{id}")
     public EntityModel<UserModel> one(@PathVariable UUID id) {
+        log.info("one called with id: {}", id);
         User user = userRepository.findById(id).orElseThrow(() -> new EntityNotFoundException(id.toString()));
 
         return EntityModel.of(

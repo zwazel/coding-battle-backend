@@ -6,6 +6,7 @@ import dev.zwazel.security.CustomUserPrincipal;
 import dev.zwazel.service.BotService;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.UUID;
 
+@Slf4j
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/bots")
@@ -29,6 +31,7 @@ class BotController {
             @RequestPart @NonNull MultipartFile sourceFile,
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
     ) throws IOException {
+        log.info("createBot called with botName: {}, language: {}", botName, language);
         return botService.createBot(botName, language, sourceFile, loggedInUser.getId());
     }
 
@@ -47,6 +50,7 @@ class BotController {
             @RequestPart @NonNull MultipartFile sourceFile,
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
     ) throws IOException {
+        log.info("updateBotSource called with botId: {}", botId);
         return botService.updateBotSource(botId, sourceFile, loggedInUser.getId());
     }
 
@@ -55,9 +59,11 @@ class BotController {
             @PathVariable @NonNull UUID botId,
             @AuthenticationPrincipal CustomUserPrincipal loggedInUser
     ) {
+        log.info("getBotSource called with botId: {}", botId);
         try {
             return botService.getBotSource(botId, loggedInUser.getId());
         } catch (MalformedURLException e) {
+            log.error("getBotSource failed with MalformedURLException", e);
             return ResponseEntity.badRequest().build();
         }
     }

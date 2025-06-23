@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,6 +20,7 @@ import org.springframework.web.util.WebUtils;
 
 import java.io.IOException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 class JwtAuthFilter extends OncePerRequestFilter {
@@ -28,11 +30,14 @@ class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest req, @NonNull HttpServletResponse res, @NonNull FilterChain chain) throws ServletException, IOException {
+        log.debug("Processing request: {}", req.getRequestURI());
         String token = resolve(req);
         if (token != null) {
+            log.debug("Found JWT token in request");
             try {
                 var jws = jwt.parse(token);
                 String username = jws.getPayload().getSubject();
+                log.debug("Successfully parsed JWT token for user: {}", username);
 
                 // Load full user details to ensure the user exists
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
@@ -42,7 +47,9 @@ class JwtAuthFilter extends OncePerRequestFilter {
                         userDetails, null, userDetails.getAuthorities());
 
                 SecurityContextHolder.getContext().setAuthentication(auth);
+                log.info("Successfully authenticated user: {}", username);
             } catch (JwtException | UsernameNotFoundException e) {
+                log.warn("Failed to authenticate user from JWT token", e);
                 // invalid / expired → leave context empty
             }
         }
@@ -51,8 +58,18 @@ class JwtAuthFilter extends OncePerRequestFilter {
 
     private String resolve(HttpServletRequest req) {
         String h = req.getHeader("Authorization");
-        if (h != null && h.startsWith("Bearer ")) return h.substring(7);
+        if (h != null && h.startsWith("Bearer ")) {
+            String token = h.substring(7);
+            log.debug("Resolved JWT token from Authorization header");
+            return token;
+        }
         Cookie c = WebUtils.getCookie(req, "ACCESS_TOKEN");
-        return c != null ? c.getValue() : null;
+        if (c != null) {
+            String token = c.getValue();
+            log.debug("Resolved JWT token from ACCESS_TOKEN cookie");
+            return token;
+        }
+        log.debug("No JWT token found in request");
+        return null;
     }
 }

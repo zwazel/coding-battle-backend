@@ -3,6 +3,7 @@ package dev.zwazel.security;
 import dev.zwazel.domain.User;
 import dev.zwazel.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -32,17 +34,22 @@ public class AuthController {
     /* ------------ POST /auth/login ---------------- */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRegisterRequest req) {
+        log.info("Login attempt for user: {}", req.username());
         Authentication auth = authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(req.username(), req.password()));
+        log.info("User {} authenticated successfully", req.username());
         return issueToken((CustomUserPrincipal) auth.getPrincipal(), req.ttlSeconds());
     }
 
     /* ----------- POST /auth/register -------------- */
     @PostMapping("/register")
     public ResponseEntity<LoginResponse> register(@RequestBody LoginRegisterRequest req) {
+        log.info("Registration attempt for user: {}", req.username());
         User newUser = userService.register(req);   // throws if a username exists
+        log.info("User {} registered successfully", newUser.getUsername());
         Authentication auth = authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(newUser.getUsername(), req.password()));
+        log.info("User {} authenticated successfully after registration", newUser.getUsername());
         return issueToken((CustomUserPrincipal) auth.getPrincipal(), req.ttlSeconds());
     }
 
@@ -50,6 +57,8 @@ public class AuthController {
     private ResponseEntity<LoginResponse> issueToken(CustomUserPrincipal principal, Long ttlSeconds) {
         long ttl = (ttlSeconds == null || ttlSeconds <= 0) ? DEFAULT_TTL : ttlSeconds;
         Duration duration = Duration.ofSeconds(ttl);
+
+        log.info("Issuing token for user {} with a ttl of {} seconds", principal.getUsername(), ttl);
 
         String token = jwt.generate(principal, duration);
 
@@ -60,6 +69,8 @@ public class AuthController {
                 .path("/")
                 .maxAge(duration)
                 .build();
+
+        log.info("Cookie created for user {}", principal.getUsername());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())

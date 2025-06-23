@@ -2,6 +2,7 @@ package dev.zwazel.security;
 
 import dev.zwazel.service.UserDetailsService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.security.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +27,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
+@Slf4j
 @Configuration
 @EnableMethodSecurity
 @RequiredArgsConstructor
@@ -48,6 +50,7 @@ class SecurityConfig {
 
     @Bean
     SecurityFilterChain chain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
+        log.info("Configuring security filter chain");
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -85,6 +88,7 @@ class SecurityConfig {
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         if (env.matchesProfiles("dev")) {
+            log.info("'dev' profile active, enabling H2 console");
             // allow H2 console
             http
                     .authorizeHttpRequests(auth -> auth
@@ -99,25 +103,13 @@ class SecurityConfig {
                         .anyRequest().authenticated()
                 );
 
+        log.info("Security filter chain configured");
         return http.build();
-    }
-
-    // expose AuthenticationManager that AuthController uses
-    @Bean
-    AuthenticationManager authManager(UserDetailsService uds, PasswordEncoder enc) {
-        DaoAuthenticationProvider dao = new DaoAuthenticationProvider();
-        dao.setUserDetailsService(uds);
-        dao.setPasswordEncoder(enc);
-        return new ProviderManager(dao);
-    }
-
-    @Bean
-    PasswordEncoder encoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
+        log.info("Configuring CORS");
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(corsAllowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList(corsAllowedMethods.split(",")));
@@ -125,6 +117,23 @@ class SecurityConfig {
         configuration.setAllowCredentials(corsAllowCredentials);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+        log.info("CORS configured with allowed origins: {}", corsAllowedOrigins);
         return source;
+    }
+
+    // expose AuthenticationManager that AuthController uses
+    @Bean
+    AuthenticationManager authManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        log.info("Configuring authentication manager");
+        var authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(authProvider);
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        log.info("Creating password encoder");
+        return new BCryptPasswordEncoder();
     }
 }
