@@ -1,4 +1,4 @@
-package dev.zwazel.model.language.compilers;
+package dev.zwazel.language.compilers;
 
 import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.model.language.LanguageToWASMCompilerInterface;
