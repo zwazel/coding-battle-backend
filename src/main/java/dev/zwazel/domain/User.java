@@ -32,7 +32,7 @@ public class User {
     @Column(length = 36, nullable = false, updatable = false)
     private UUID id;
 
-    @Column(nullable = false, length = 40)
+    @Column(nullable = false, length = 256)
     private String username;               // as entered
 
     /**

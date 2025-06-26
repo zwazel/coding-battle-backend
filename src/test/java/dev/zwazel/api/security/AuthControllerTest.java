@@ -28,7 +28,7 @@ class AuthControllerTest {
     @Test
     void login() throws Exception {
         // given
-        var username = "testuser";
+        var username = "testuser-" + java.util.UUID.randomUUID();;
         var password = "password";
         userService.register(new AuthController.LoginRegisterRequest(username, password, null));
 

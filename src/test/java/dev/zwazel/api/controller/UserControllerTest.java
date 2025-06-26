@@ -39,8 +39,8 @@ class UserControllerTest {
     void getUserShouldBeAuthenticated() throws Exception {
         log.info("Testing getUser endpoint with authentication...");
 
-        // given
-        var username = "testuser2";
+        // generate UUID for username
+        var username = "testuser-" + java.util.UUID.randomUUID();
         var password = "password";
         User user = userService.register(new AuthController.LoginRegisterRequest(username, password, 0L));
         log.info("Registered user: {}", user);
