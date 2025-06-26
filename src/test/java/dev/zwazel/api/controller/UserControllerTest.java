@@ -41,7 +41,7 @@ class UserControllerTest {
         log.info("Registered user: {}", user);
 
         // when
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\": \"" + username + "\", \"password\": \"" + password + "\", \"ttlSeconds\": 0}"))
                 .andExpect(status().isOk())
