@@ -1,5 +1,7 @@
 package dev.zwazel.api.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.zwazel.domain.User;
 import dev.zwazel.security.AuthController;
 import dev.zwazel.service.UserService;
@@ -30,6 +32,9 @@ class UserControllerTest {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Test
     void getUserShouldBeAuthenticated() throws Exception {
         log.info("Testing getUser endpoint with authentication...");
@@ -50,8 +55,8 @@ class UserControllerTest {
         String response = result.getResponse().getContentAsString();
         log.info("Login successful, received response: {}", response);
 
-
-        String token = response.substring(response.indexOf("token\":\"") + 9, response.indexOf("\",\"expiresInSeconds") - 1);
+        JsonNode jsonNode = objectMapper.readTree(response);
+        String token = jsonNode.get("token").asText();
 
         log.info("Extracted token: {}", token);
 

@@ -33,7 +33,7 @@ class AuthControllerTest {
         userService.register(new AuthController.LoginRegisterRequest(username, password, null));
 
         // when
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\": \"" + username + "\", \"password\": \"" + password + "\"}"))
                 // then
