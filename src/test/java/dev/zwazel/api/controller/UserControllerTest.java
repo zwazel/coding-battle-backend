@@ -41,15 +41,16 @@ class UserControllerTest {
         log.info("Registered user: {}", user);
 
         // when
-        MvcResult result = mockMvc.perform(post("/api/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\": \"" + username + "\", \"password\": \"" + password + "\", \"ttlSeconds\": 0}"))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        log.info("Login successful, received response: {}", result.getResponse().getContentAsString());
-
         String response = result.getResponse().getContentAsString();
+        log.info("Login successful, received response: {}", response);
+
+
         String token = response.substring(response.indexOf("token\":\"") + 9, response.indexOf("\",\"expiresInSeconds") - 1);
 
         log.info("Extracted token: {}", token);
