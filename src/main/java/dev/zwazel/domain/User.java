@@ -16,11 +16,10 @@ import java.util.UUID;
                 @UniqueConstraint(name = "uk_username", columnNames = "username")
         }
 )
-@Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Data
 public class User {
     private static final BCryptPasswordEncoder ENC = new BCryptPasswordEncoder();
 
@@ -33,7 +32,7 @@ public class User {
     @Column(length = 36, nullable = false, updatable = false)
     private UUID id;
 
-    @Column(nullable = false, length = 40)
+    @Column(nullable = false, length = 256)
     private String username;               // as entered
 
     /**

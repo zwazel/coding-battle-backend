@@ -31,6 +31,7 @@ class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest req, @NonNull HttpServletResponse res, @NonNull FilterChain chain) throws ServletException, IOException {
         log.debug("Processing request: {}", req.getRequestURI());
+
         String token = resolve(req);
         if (token != null) {
             log.debug("Found JWT token in request");
@@ -53,6 +54,9 @@ class JwtAuthFilter extends OncePerRequestFilter {
                 // invalid / expired → leave context empty
             }
         }
+
+        // Continue with the filter chain
+        log.debug("Continuing filter chain for request: {}", req.getRequestURI());
         chain.doFilter(req, res);
     }
 

@@ -65,23 +65,23 @@ class SecurityConfig {
                         /* open to everyone */
                         .requestMatchers(
                                 /* Public */
-                                AntPathRequestMatcher.antMatcher("/api/**/public/**"),
+                                AntPathRequestMatcher.antMatcher("/**/public/**"),
                                 /* Auth */
-                                AntPathRequestMatcher.antMatcher("/api/auth/**"),
+                                AntPathRequestMatcher.antMatcher("/**/auth/**"),
                                 /* Lobbies */
-                                AntPathRequestMatcher.antMatcher("/api/lobbies/**")
+                                AntPathRequestMatcher.antMatcher("/**/lobbies/**")
                         )
                         .permitAll()
 
                         /* ADMIN role */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/**/admin/**")
+                                AntPathRequestMatcher.antMatcher("/**/admin/**")
                         ).hasRole("ADMIN")
 
                         /* USER role */
                         .requestMatchers(
-                                AntPathRequestMatcher.antMatcher("/api/bots/**"),
-                                AntPathRequestMatcher.antMatcher("/api/users/**")
+                                AntPathRequestMatcher.antMatcher("/**/bots/**"),
+                                AntPathRequestMatcher.antMatcher("/**/users/**")
                         ).hasRole("USER")
                 )
 
