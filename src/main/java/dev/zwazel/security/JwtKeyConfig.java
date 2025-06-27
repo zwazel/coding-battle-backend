@@ -15,7 +15,6 @@ class JwtKeyConfig {
 
     @Bean
     public SecretKey jwtSigningKey() {
-        // use UTF-8 or Base64 decode depending on how you store the secret
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -1,6 +1,6 @@
-package dev.zwazel.model.language;
+package dev.zwazel.language;
 
-import dev.zwazel.DTO.CompileResultDTO;
+import dev.zwazel.api.model.DTO.CompileResultDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;

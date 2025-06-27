@@ -1,4 +1,4 @@
-package dev.zwazel.DTO;
+package dev.zwazel.api.model.DTO;
 
 import org.springframework.http.HttpStatus;
 
