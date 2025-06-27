@@ -3,6 +3,9 @@ package dev.zwazel.service;
 import dev.zwazel.api.model.DTO.CompileResultDTO;
 import dev.zwazel.domain.Bot;
 import dev.zwazel.domain.User;
+import dev.zwazel.exception.BotNameAlreadyExistsException;
+import dev.zwazel.exception.BotNotFoundException;
+import dev.zwazel.exception.UserNotFoundException;
 import dev.zwazel.language.Language;
 import dev.zwazel.repository.BotRepository;
 import dev.zwazel.repository.UserRepository;
@@ -35,6 +38,16 @@ public class BotService {
 
     private final StorageService storageService;
 
+    public Iterable<Bot> getBotsByUserId(UUID userId) {
+        log.info("Fetching bots for user with ID: {}", userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("User not found with ID: {}", userId);
+                    return new UserNotFoundException(userId);
+                });
+        return botRepository.findAllByOwner(user);
+    }
+
     public ResponseEntity<CreateBotResponse> createBot(String botName, Language language, MultipartFile sourceFile, UUID userId) throws IOException {
         log.info("Creating bot '{}' for user '{}'", botName, userId);
 
@@ -50,13 +63,13 @@ public class BotService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     log.error("User not found with ID: {}", userId);
-                    return new IllegalArgumentException("User not found with ID: " + userId);
+                    return new UserNotFoundException(userId);
                 });
 
         // Check if the bot name is already taken
         if (botRepository.existsByNameIgnoreCaseAndOwner(botName.toLowerCase(), user)) {
             log.warn("Bot name '{}' already exists for user '{}'", botName, userId);
-            throw new IllegalArgumentException("Bot name already exists for this user");
+            throw new BotNameAlreadyExistsException(botName);
         }
 
         Path savedSourcePath = storageService.saveSource(userId, botName, language, sourceFile);
@@ -102,13 +115,13 @@ public class BotService {
         Bot bot = botRepository.findById(botId)
                 .orElseThrow(() -> {
                     log.error("Bot not found with ID: {}", botId);
-                    return new EntityNotFoundException("Bot not found with ID: " + botId);
+                    return new BotNotFoundException(botId);
                 });
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     log.error("User not found with ID: {}", userId);
-                    return new EntityNotFoundException("User not found with ID: " + userId);
+                    return new UserNotFoundException(userId);
                 });
 
         // Check if the user is the owner of the bot
@@ -189,9 +202,17 @@ public class BotService {
                 .body(file);
     }
 
-    // TODO: Update the bot's source file service, and recompile it
+    public Bot getBotById(@NonNull UUID botId) {
+        log.info("Fetching bot with ID: {}", botId);
+        return botRepository.findById(botId)
+                .orElseThrow(() -> {
+                    log.error("Bot not found with ID: {}", botId);
+                    return new BotNotFoundException(botId);
+                });
+    }
 
+
+    // TODO: replace with hateoas response model
     public record CreateBotResponse(UUID id, CompileResultDTO compileResult) {
-
     }
 }

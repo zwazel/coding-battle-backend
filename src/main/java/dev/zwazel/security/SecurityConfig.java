@@ -48,6 +48,12 @@ class SecurityConfig {
     @Value("${cors.allow-credentials:true}")
     private boolean corsAllowCredentials;
 
+    @Value("${roles.user}")
+    private String userRoleName;
+
+    @Value("${roles.admin}")
+    private String adminRoleName;
+
     @Bean
     SecurityFilterChain chain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
         log.info("Configuring security filter chain");
@@ -76,13 +82,13 @@ class SecurityConfig {
                         /* ADMIN role */
                         .requestMatchers(
                                 AntPathRequestMatcher.antMatcher("/**/admin/**")
-                        ).hasRole("ADMIN")
+                        ).hasRole(adminRoleName)
 
                         /* USER role */
                         .requestMatchers(
                                 AntPathRequestMatcher.antMatcher("/**/bots/**"),
                                 AntPathRequestMatcher.antMatcher("/**/users/**")
-                        ).hasRole("USER")
+                        ).hasRole(userRoleName)
                 )
 
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

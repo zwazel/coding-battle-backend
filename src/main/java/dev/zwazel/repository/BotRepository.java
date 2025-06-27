@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface BotRepository extends JpaRepository<Bot, UUID> {
     boolean existsByNameIgnoreCaseAndOwner(String nameLower, User user);
+
+    Iterable<Bot> findAllByOwner(User user);
 }
